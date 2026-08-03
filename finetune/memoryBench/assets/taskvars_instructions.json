@@ -1,0 +1,11 @@
+{
+  "put_block_back": [
+    "move the block on the color patch to the center, then press the button, and finally move the block back to where it was placed"
+  ],
+  "rearrange_block": [
+    "Move the block not on the patch to the empty patch, then press the button, then move the block that has not been moved off the patch"
+  ],
+  "reopen_drawer": [
+    "Close the opened drawer, push the button, and then open the previous drawer again"
+  ]
+}

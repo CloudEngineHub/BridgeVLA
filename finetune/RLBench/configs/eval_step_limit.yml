@@ -1,0 +1,33 @@
+# Per-task max keyframe-steps (step_limit) for RLBench evaluation.
+#
+# Same idea as RMBench's task_config/_eval_step_limit.yml: a separate limit per task rather than one
+# global --episode-length. Before each task eval.py writes the value here into both the rollout loop
+# length and the env's time_in_state normalisation denominator (the two were already coupled through
+# a single episode_length; this table decouples them per task).
+#
+# Semantics: one step = one keyframe prediction (the agent predicts the next gripper pose and the
+# planner executes it). Hitting this limit without success counts as a timeout failure.
+#
+# Override priority: a non-null value for the task in this table > the --episode-length CLI flag (the fallback default).
+# To let a task fall back to the global default, set its value to null.
+#
+# Initially all set to 25 (= the previous global default), to be tuned per task by hand later.
+
+close_jar: 25
+reach_and_drag: 25
+insert_onto_square_peg: 25
+meat_off_grill: 25
+open_drawer: 25
+place_cups: 35
+place_wine_at_rack_location: 25
+push_buttons: 25
+put_groceries_in_cupboard: 25
+put_item_in_drawer: 25
+put_money_in_safe: 25
+light_bulb_in: 25
+slide_block_to_color_target: 25
+place_shape_in_shape_sorter: 25
+stack_blocks: 35
+stack_cups: 25
+sweep_to_dustpan_of_size: 25
+turn_tap: 25

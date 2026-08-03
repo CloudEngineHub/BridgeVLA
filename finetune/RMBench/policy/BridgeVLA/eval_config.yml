@@ -1,0 +1,123 @@
+# BridgeVLA RMBench eval control panel (next to eval_double_env.sh; edit this file).
+#
+# `bash eval_double_env.sh` is enough to run — which task / which ckpt / which GPU are all set in
+# the "run parameters" below, so there is no need to type <task_name> <task_config> ... on the
+# command line. (The old form still works: positional arguments win, handy for a one-off override.)
+#
+# Config freezing: eval_double_env.sh snapshots this file the moment it starts; every task and
+# episode in that run follows the snapshot, so editing this file mid-run does not affect it.
+#
+# This file is also read by eval_policy_client.py after it loads task_config/<cfg>.yml, to override a
+# few knobs that used to be scattered elsewhere, saving you from digging through the shared
+# task_config/demo_clean.yml and task_config/_eval_step_limit.yml:
+# task_config/_eval_step_limit.yml:
+#   1. visualisation switches (eval_video_log / eval_overlay_viz) — independent, any combination works
+#   2. recording parameters (eval_video_mode etc., only effective when eval_video_log=true)
+#   3. the max execution steps per task (step_limit, a table keyed by task name)
+#
+# Priority: environment variables (RMBENCH_EVAL_*) > this file > the task_config defaults.
+# Leaving an entry empty (null) keeps the task_config default rather than overriding it.
+
+# ---- 0. Run parameters (read directly by eval_double_env.sh; positional arguments override them) ----
+#   task_name   : which task(s) to run. Three forms:
+#                   one   -> cover_blocks
+#                   many  -> "cover_blocks swap_blocks battery_try" (space separated)
+#                   all   -> all  (= every non-underscore task under envs/, run in sequence)
+#                 With several tasks the server (model is task-independent) starts once and the client loops over the tasks.
+#   task_config : task_config/<this>.yml (e.g. demo_clean / demo_clean_depth)
+#   ckpt_setting: a ckpt directory (holding model_*.pth + exp_cfg.yaml + mvt_cfg.yaml) or a path to a
+#                 single .pth; relative paths resolve against the repository root. RMBench is trained
+#                 per task, so the released ckpts are split by task: data/bridgevla_ckpt/bridgevla_plus/rmbench/<task>.
+#                 To evaluate your own run, just put the run directory (or one .pth inside it) here.
+#   seed        : eval random seed (integer)
+#   gpu_id      : which GPU to use (CUDA_VISIBLE_DEVICES). Format "server,client":
+#                   "0,1" -> server on GPU0, client on GPU1
+#                   "1,0" -> server on GPU1, client on GPU0
+#                   "0"   -> server and client both on GPU0
+# All 10 RMBench tasks: battery_try, blocks_ranking_try, cover_blocks,
+# observe_and_pickup, place_block_mat, press_button, put_back_block,
+# rearrange_blocks, swap_T, swap_blocks
+#task_name: battery_try cover_blocks press_button rearrange_blocks
+#task_name: blocks_ranking_try observe_and_pickup put_back_block swap_blocks swap_T 
+#task_name: blocks_ranking_try observe_and_pickup put_back_block swap_blocks swap_T battery_try cover_blocks press_button rearrange_blocks
+task_name: swap_T
+task_config: demo_clean
+ckpt_setting: data/bridgevla_ckpt/bridgevla_plus/rmbench/swap_T
+seed: 0
+gpu_id: "0,1"
+
+# ---- 0.1 Memory ablation switches (eval side; must match how the loaded model was trained) ----
+# These mirror memory.temporal_memory / memory.spatial_memory in the training rmbench_config.yaml:
+#   memory_temporal: memory 1 = the temporal memory of stage 1 (mvt1, global/coarse)
+#       (the two neighbouring frames + historical keyframes + the stage-1 initial anchor frame).
+#   memory_spatial:  memory 2 = the spatial memory of stage 2 (mvt2, local/fine)
+#       (the local per-view initial anchor frame).
+# The two values state "the memory this eval expects the model to have". When the ckpt is loaded its
+# mvt_cfg.yaml (holding memory.enabled / temporal_memory / spatial_memory) is read, and a mismatch
+# with these values (e.g. the model was trained without temporal memory but eval says true) aborts
+# immediately, so the wrong ckpt can never be used in an ablation comparison. Both true by default (full memory).
+memory_temporal: true
+memory_spatial: true
+
+# ---- 1. Visualisation switches (independent, any combination works) ----
+#
+# eval_video_log — the single master switch for third_view rendering + whether to record an mp4:
+#   true  = record a third_view video
+#   false = disable recording and skip the entire third_view rendering chain (get_obs no longer renders
+#           the third_view camera). The BridgeVLA model does not consume third_view, so this is a free
+#           speed-up that saves CPU (software Vulkan takes ~20s per frame).
+#   null  = keep the eval_video_log from task_config/<cfg>.yml
+#
+# eval_overlay_viz — whether to save predicted-heatmap overlays of the three views (per arm, per stage, assembled into a grid at the end of each episode):
+#   true  = save, for every frame, the overlay of the three views (the top/front/right network views)
+#           per arm (L/R) and per stage (mvt1/mvt2). The output matches the training viz and lands in
+#           <run_dir>/eval/.../viz/episode{E}/... . It comes from the network forward + point-cloud
+#           rendering and never touches third_view, but the extra heatmap rendering and matplotlib
+#           writes per frame slow things down noticeably (pair it with a smaller test_num).
+#   false = disabled (zero overhead).
+#   RMBENCH_EVAL_OVERLAY_VIZ=1/0 overrides this temporarily (highest priority).
+#
+# Combination cheat sheet:
+#   video=false, overlay=false → fastest (zero visualisation overhead)
+#   video=false, overlay=true  → heatmaps only, no third_view rendering (recommended for debugging)
+#   video=true,  overlay=false → mp4 only
+#   video=true,  overlay=true  → everything on
+eval_video_log: false
+eval_overlay_viz: true
+
+# ---- 1.1 Recording parameters (only effective when eval_video_log=true) ----
+# Keyframe visualisation / continuous-frame visualisation:
+#   keyframe = write 1 frame per keyframe (still images of the arm teleporting to each target pose)
+#   smooth   = continuous frames, sampled by physics step inside the control loop, recording the interpolated motion along the planned trajectory
+#   null     = keep the eval_video_mode from task_config/<cfg>.yml
+eval_video_mode: keyframe
+
+# In smooth mode, write one frame every N physics steps (scene.step, 250 Hz); smaller = smoother and larger files.
+# null = keep the task_config default (5).
+eval_video_step_freq: null
+
+# Playback frame rate. null = follow the mode (keyframe=10, smooth=30).
+eval_video_fps: null
+
+# ---- 2. Max execution steps per task ----
+# The step ceiling differs per task, so this is a "task name -> step count" table (moved here from the
+# original task_config/_eval_step_limit.yml). A task left null or absent from the table falls back to
+# the shared task_config/_eval_step_limit.yml (still the source for other policies — do not delete it).
+step_limit:
+  classify_blocks: 45
+  place_object_box: null
+  storage_blocks: 30
+  observe_and_pickup: 8
+  rearrange_blocks: 22
+  cover_blocks: 50
+  swap_T: 15
+  press_button: 35
+  swap_blocks: 25
+  blocks_ranking_try: 150
+  place_block_mat: 50
+  put_back_block: 18
+  battery_try: 30
+
+# ---- (appendix) Number of eval episodes ----
+# How many seeds to run per task. null = keep the old default of 100 (RMBENCH_EVAL_TEST_NUM overrides it).
+test_num: 100

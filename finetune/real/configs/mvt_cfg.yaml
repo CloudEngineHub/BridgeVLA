@@ -1,0 +1,26 @@
+# Real-robot MVT config. Identical to finetune/bridgevla/mvt/configs/rvt2.yaml
+# (3-view top/front/right via point_renderer, 224x224) so pretrained weights
+# from simulation can be loaded without shape mismatches.
+stage_two: True
+norm_corr: True
+rend_three_views: True
+rend_oblique_views: False
+use_point_renderer: True
+inp_pre_pro: False
+inp_pre_con: False
+feat_ver: 1
+img_size: 224
+img_patch_size: 14
+cvx_up: True
+xops: True
+rot_ver: 1
+st_wpt_loc_inp_no_noise: True
+st_wpt_loc_aug: 0.075
+wpt_img_aug: 0.0
+# img_aug_2 must be 0 when episodic memory is enabled: img feature noise is
+# applied only to the current frame (anchor / history render with img_aug=0),
+# so any non-zero value breaks the per-pixel correspondence between the current
+# frame and the memory KV. GemBench overrides this to 0 at launch for the same
+# reason; real bakes it here since memory is default-on (see real_config.yaml).
+img_aug_2: 0.0
+flip_top_up: True

@@ -1,0 +1,23 @@
+*.pth
+*.pth.*
+__pycache__/
+*.egg-info/
+venv/
+.idea/
+.DS_Store
+.env
+.cache/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+.eggs/
+.ipynb_checkpoints/
+libs/
+frankapy/
+save_data/
+
+# Runtime logs & data generated during real-robot evaluation
+logs/
+logs_real/

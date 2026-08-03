@@ -1,0 +1,111 @@
+exp_id: ours_gembench
+tasks: all
+bs: 4
+num_workers: 4
+epochs: 300
+save_every_n_epochs: 10
+# false (default) -> weights only (smaller files), resume restarts the optimizer at global_step=0;
+# true -> also store optimizer state + global_step + freeze_epochs for an exact resume.
+save_optimizer_state: false
+sample_distribution_mode: transition_uniform
+# --- Two-stage training ---
+# always_freeze (both stages): PaliGemma vision_tower, the tied lm_head/embed_tokens, and up_grounding
+#   (GemBench trains actions only, so it is warm-started from pretrain and left frozen).
+# Stage 1 (epoch < freeze_epochs) additionally freezes the PaliGemma body; Stage 2 unfreezes it and rebuilds
+#   DDP + the optimizer at the transition, so the reducer picks up the newly-trainable params.
+freeze_epochs: 2
+warmup_steps: 1000
+
+# --- PaliGemma activation (gradient) checkpointing ---
+# True (default): HF gradient checkpointing (use_reentrant=False) to drop activation memory; pairs with
+# memory.grad_through_tokens=true. train.py propagates it onto mvt_cfg before MVT() is built.
+gradient_checkpointing: true
+
+# --- Per-epoch heatmap visualization ---
+# Each viz epoch samples ONE episode per task and dumps, for every step, the pred+GT translation heatmaps
+# plus the memory grids (stage-1 memory_grid.png; stage-2 mvt2/anchor_memory_grid.png).
+viz_every_n_epochs: 100
+# initial_viz: true -> also run the viz pass at epoch 0 (a pre-training baseline).
+initial_viz: true
+# null -> all tasks; [] -> disable viz; list -> only those taskvars.
+viz_tasks:
+  - open_drawer+0
+  - put_groceries_in_cupboard+0
+
+swanlab_project: "bridgevla_plus_gembench"
+swanlab_run: "gembench_all"
+# Fallback only; train.sh overrides it with --log_dir "${BRIDGEVLA_LOG_DIR}". Read verbatim by yacs, so no ${...}.
+log_dir: "data/bridgevla_data/logs"  # fallback; train.sh overrides it with --log_dir ${BRIDGEVLA_LOG_DIR}
+peract:
+  lr: 5e-5
+  optimizer_type: "adamw"
+  weight_decay: 0.001
+  betas: [0.9, 0.95]
+  transform_augmentation_xyz: [0.125, 0.125, 0.125]
+  transform_augmentation_rpy: [0.0, 0.0, 45.0]
+  lambda_weight_l2: 1e-4
+rvt:
+  place_with_mean: False
+  img_aug: 0.0
+
+# Gripper rotation / open-close heads — an A/B switch; flip both lines together:
+#   new = stage-1 features + continuous 6D rotation regression ("6d" / feat_from_stage1: true)
+#   old = stage-2 features + discrete Euler bins ("euler_disc" / feat_from_stage1: false)
+# "6d" makes train.py set mvt_cfg.rot_ver=2 + feat_dim=10 (6D -> Gram-Schmidt -> SO(3), Frobenius loss);
+# "euler_disc" leaves rvt2.yaml's rot_ver=1. The two switches are independent and can be ablated separately.
+# Translation always comes from the stage1+stage2 heatmaps and is unaffected by either.
+rotation_representation: "6d"   # new: "6d" (6D regression)  | old: "euler_disc" (discrete Euler bins)
+feat_from_stage1: true          # new: true (read stage-1 features) | old: false (read stage-2 features)
+
+# --- Per-step ignore-collisions supervision: disabled for GemBench ---
+# The upstream 3DLoTus LMDB has no such field (action is (T,8)) and the old code trained the head against a
+# constant 1.0, while eval never reads the bit. The label is now dropped end to end. The feat head's width
+# is unchanged (6+2+2=10), so previously trained ckpts still load and evaluate exactly as before.
+predict_collision: false
+
+# --- Episodic memory (spatial anchor + temporal episodic) ---
+# Mirrors mvt_cfg.memory; train.py propagates this block onto mvt_cfg.memory before the network is built.
+#   Spatial Anchor (stage1 + stage2): episode-frozen frame-0 PaliGemma tokens queried by per-view
+#     cross-attn. At stage 2 the anchor PC is re-rendered with the same trans_pc as the current frame.
+#   Temporal Episodic (stage1 only): K-slot sliding window of recent keyframe tokens with a per-slot learned
+#     index embedding. Purely visual — historical-action PE was removed.
+# With grad_through_tokens=true the anchor / history forwards build a graph; otherwise no_grad + detach.
+# Caveat: memory.enabled=true skips peract.transform_augmentation, since apply_se3_aug_con does not yet
+# perturb anchor / history and would break fixed-camera per-pixel correspondence.
+memory:
+  enabled: true
+  # Memory content = frame-0 anchor + the two most-recent EXECUTED keyframes, matching RMBench's keyframe_gt
+  # layout. GemBench has no subtask-boundary label, so the discriminator is off and nothing is admitted into
+  # slots 2..K-1 — and k_temporal=2 leaves none anyway.
+  k_temporal: 2
+  # Frame-selection policy: slots 0/1 = the two most-recent executed keyframes; slots 2..K-1 would hold
+  # discriminator-admitted subtask boundaries (none here).
+  select: keyframe_gt
+  spatial_at_mvt1: true
+  spatial_at_mvt2: true
+  temporal_at_mvt1: true
+  # --- Memory ablation switches (memory only; the stage1/stage2 mvt flow is unchanged) ---
+  #   temporal_memory -> stage-1 memory: the temporal block + the stage-1 anchor frame.
+  #   spatial_memory  -> stage-2 memory: the local per-view anchor frame.
+  # Training: `bash train.sh --temporal_memory false` overrides these and appends _no_temporal_mem /
+  # _no_spatial_mem / _no_mem to the run name. Eval: run_server.sh / run_client.sh must declare the same
+  # switches as the loaded ckpt's mvt_cfg.yaml, or startup errors out.
+  temporal_memory: true
+  spatial_memory: true
+  # Ablation: true -> mvt1 and mvt2 share one spatial block. Default false (independent params per stage).
+  share_spatial_across_stages: false
+  # MemoryBlock attention shape; dim is fixed to PaliGemma's vlm_dim=2048. heads=8 x dim_head=128 -> inner
+  # Q/K/V dim 1024. num_layers stacks (cross + self + ffn) layers, all reusing the same KV.
+  heads: 8
+  dim_head: 128
+  num_layers: 2
+  ffn_mult: 2
+  use_fast_attn: false
+  # True (default): the anchor / history forwards build a graph and their KV is not detached, so gradient
+  # flows from the memory branch back into PaliGemma. False restores the legacy no_grad + detached path.
+  # Eval is unaffected (cache path + inference no_grad).
+  grad_through_tokens: true
+  # --- Keyframe discriminator: DISABLED for GemBench ---
+  # There is no "is-subtask-boundary" label to supervise it with, so the eval admission gate defaults to false.
+  discriminator:
+    enabled: false

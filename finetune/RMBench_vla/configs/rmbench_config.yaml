@@ -1,0 +1,133 @@
+exp_id: bridgevla_rmbench
+# Comma-separated task names, or "all" for RMBENCH_TASKS (the 10 tasks with extracted keyframe_depth +
+# instructions). CLI --tasks still overrides this.
+tasks: battery_try,blocks_ranking_try,cover_blocks,observe_and_pickup,press_button,put_back_block,rearrange_blocks,swap_T,swap_blocks
+# All 10: battery_try, blocks_ranking_try, cover_blocks, observe_and_pickup, place_block_mat, press_button,
+#   put_back_block, rearrange_blocks, swap_T, swap_blocks
+# bs MUST be >= 4 per rank: PaliGemma bf16 attention raises a CUDA SIGFPE on H20 below that.
+bs: 4
+# Decode-bound: cold per-episode HDF5 decode (RGB + depth->PCD over all keyframes/cams) starves the GPUs,
+# while the host's cores sit idle, so more parallel decode workers feed them better. Lossless — worker count
+# does not affect sample order or values. Paired with persistent_workers + prefetch + a larger episode cache.
+num_workers: 8
+
+# --- Multi-task sampling balance ---
+# The dataset flattens episodes into per-(task, ep, step) transitions, so a uniform sampler draws each task
+# proportional to its keyframe count: blocks_ranking_try 25.9% (63 kf/ep) vs observe_and_pickup 1.2%
+# (4 kf/ep), a ~20.7x imbalance. mode=temperature draws task t with prob ∝ n_t**alpha: alpha=1 =
+# transition-uniform (old behavior), 0 = task-uniform, 0.5 = tempered (recommended). No-op for single-task runs.
+task_sampling:
+  mode: temperature
+  alpha: 0.2
+
+epochs: 520
+save_every_n_epochs: 30
+# false (default) -> weights only (smaller files), resume restarts the optimizer at global_step=0;
+# true -> also store optimizer state + global_step + freeze_epochs for an exact resume.
+save_optimizer_state: false
+freeze_epochs: 5
+warmup_steps: 1000
+
+# HF gradient checkpointing on the PaliGemma decoder layers — essential for dual-arm +
+# memory.grad_through_tokens, where per-arm stage-2 anchor forwards add extra graphs.
+gradient_checkpointing: true
+
+# Per-epoch heatmap visualization cadence (dual-arm: left+right heatmaps). Each viz epoch picks ONE random
+# episode per task and renders every keyframe of it, for both arms.
+viz_every_n_epochs: 1600
+# viz_tasks: null -> all tasks (one sampled episode each); [] -> disable viz; list -> only those tasks.
+# Per-step tri-view overlays are also stitched into one grid per (arm, stage): rows = keyframes, cols = views.
+viz_tasks: null
+# initial_viz: true -> also run the viz pass at epoch 0 (a pre-training baseline).
+initial_viz: true
+
+swanlab_project: "bridgevla_plus_rmbench"
+swanlab_run: "rmbench"
+# Fallback only (overridden by train.sh --log_dir, derived from the repo location).
+log_dir: "data/bridgevla_data/logs"  # fallback; train.sh overrides it with --log_dir ${BRIDGEVLA_LOG_DIR}
+
+peract:
+  lr: 5e-5
+  optimizer_type: "adamw"
+  weight_decay: 0.001
+  betas: [0.9, 0.95]
+  # Translation aug is a fraction of scene bounds per axis. 0.125 was too aggressive for RMBench (dual-arm GT
+  # near the workspace edges could exceed bounds after SE3 aug). Rotation unchanged.
+  transform_augmentation_xyz: [0.03, 0.03, 0.03]
+  transform_augmentation_rpy: [0.0, 0.0, 30.0]
+  lambda_weight_l2: 1e-4
+
+rvt:
+  # MUST be false: memory caches step-0 anchor tokens under a fixed cube, and the dual-arm cube projection
+  # assumes a bounds-centered (arm-independent) cube.
+  place_with_mean: false
+  img_aug: 0.0
+
+# Tri-view renderer top camera: roll up-vector CCW 90° (screen CW 90°).
+rotate_top_ccw90: true
+# mvt1/mvt2 orthographic FOV (default 2.0); smaller = proportional zoom-in.
+renderer_img_sizes_w: 0.8
+# mvt1 splat radius (finer); mvt2 keeps 0.012 since its point cloud is sparser after trans_pc.
+splat_radius: 0.004
+splat_radius_mvt2: 0.012
+# Stage-2 zoom-center jitter in mvt1-cube coords (actual noise is ±2x this). The mvt default 0.05 (±0.10) is
+# lowered to 0.005 (~±1 cm) to reduce mvt2 GT clipping near cube edges while keeping some robustness.
+st_wpt_loc_aug: 0.005
+
+# --- Dual-arm ---
+num_arms: 2
+# RMBench take_action('ee') has no collision flag, so don't supervise it.
+predict_collision: false
+
+# --- Rotation head: 6D continuous regression (Zhou et al., CVPR 2019) ---
+# "6d" -> train.py sets rot_ver=2 and feat_dim=10; the rotation is regressed as a 6D vector ->
+# Gram-Schmidt -> SO(3), supervised by a Frobenius loss to the GT matrix (no quaternion_to_discrete_euler /
+# gimble_fix). "euler_disc" restores the original discrete head.
+rotation_representation: "6d"
+
+# --- Rotation/grip/collision feature source: STAGE 1 (coarse) ---
+# true -> those heads read stage-1 features (global max-pool + waypoint local patch) and stage 2 emits only
+# the translation heatmap; translation precision is unchanged. false -> the original stage-2 source.
+feat_from_stage1: true
+
+# --- Episodic memory (RMBench tasks are memory-dependent) ---
+memory:
+  enabled: true
+  # M = max temporal memory slots. With select=keyframe_gt this caps accumulated subtask-boundary keyframes
+  # (blocks_ranking_try peaks at ~11).
+  k_temporal: 12
+  # Temporal frame-selection policy: keyframe_gt = variable-length memory of GT subtask-boundary keyframes
+  # (slot 0 = most recent); sliding = LEGACY K most-recent keyframes.
+  select: keyframe_gt
+  spatial_at_mvt1: true
+  spatial_at_mvt2: true
+  temporal_at_mvt1: true
+  # --- Memory ablation switches (memory only; the stage1/stage2 mvt flow is unchanged) ---
+  #   temporal_memory -> stage-1 memory: the temporal block (mem_temporal_s1) + the stage-1 anchor frame
+  #     (mem_spatial_s1). false -> the whole stage-1 memory is disabled.
+  #   spatial_memory  -> stage-2 memory: the local per-view anchor frame (mem_spatial_s2).
+  # Disabling either appends _no_temporal_mem / _no_spatial_mem / _no_mem to the run name. At eval set the
+  # same memory_temporal / memory_spatial in eval_config.yml; a mismatch raises an explicit error.
+  temporal_memory: true
+  spatial_memory: true
+  share_spatial_across_stages: false
+  heads: 8
+  dim_head: 128
+  num_layers: 2
+  ffn_mult: 2
+  use_fast_attn: false
+  # Dual-arm + grad_through_tokens=true roughly doubles the stage-2 anchor backward graphs (one per arm);
+  # gradient checkpointing keeps that affordable. Set false if memory-bound.
+  grad_through_tokens: true
+  # --- Keyframe discriminator ("is the current frame a subtask end?") ---
+  # Input = the current frame's post-memory stage-1 tokens; trained with BCE on mem_label; at eval it gates
+  # whether a frame enters memory. Tied to temporal_memory: with that false it is force-disabled (the BCE
+  # term leaves the loss) so the ablation stays clean.
+  discriminator:
+    enabled: true
+    input: current        # current = post-memory current-frame tokens only
+    heads: 8
+    hidden: 512
+    loss_weight: 1.0      # lambda on the BCE term added to the action loss
+    pos_weight: 5.5       # BCEWithLogits pos_weight (~neg/pos, ~15% positives)
+    threshold: 0.5        # eval sigmoid gate; retune to F1-optimal after Phase 1

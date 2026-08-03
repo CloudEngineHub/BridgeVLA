@@ -1,0 +1,100 @@
+exp_id: bridgevla_memorybench
+# Comma-separated task names, or "all" for MEMORYBENCH_TASKS (put_block_back, rearrange_block,
+# reopen_drawer). Variants (+0/+1/+2) cannot be filtered here — they are pooled under each task's
+# all_variations/episodes/ and always trained together.
+tasks: all
+# bs MUST be >= 4 per rank: the PaliGemma bf16 attention kernel raises a CUDA SIGFPE on H20 with bs < 4
+# (the same constraint is encoded as MIN_FORWARD_BS in visualize.py). Anything lower crashes on iter 0.
+bs: 4
+num_workers: 4
+epochs: 500
+save_every_n_epochs: 20
+sample_distribution_mode: transition_uniform
+freeze_epochs: 20
+warmup_steps: 1000
+
+# --- PaliGemma activation (gradient) checkpointing ---
+# True (default): HF gradient checkpointing (use_reentrant=False) to drop activation memory; pairs with
+# memory.grad_through_tokens=true. Set false if you have headroom and want max throughput.
+gradient_checkpointing: true
+
+# --- Per-epoch heatmap visualization ---
+viz_every_n_epochs: 20
+viz_tasks: null
+
+swanlab_project: "bridgevla_plus_memorybench"
+swanlab_run: "memorybench_all"
+# Fallback only; train.sh overrides it with --log_dir "${BRIDGEVLA_LOG_DIR}".
+log_dir: "data/bridgevla_data/logs"  # fallback; train.sh overrides it with --log_dir ${BRIDGEVLA_LOG_DIR}
+peract:
+  lr: 5e-5
+  optimizer_type: "adamw"
+  weight_decay: 0.001
+  betas: [0.9, 0.95]
+  transform_augmentation_xyz: [0.125, 0.125, 0.125]
+  transform_augmentation_rpy: [0.0, 0.0, 45.0]
+  lambda_weight_l2: 1e-4
+rvt:
+  place_with_mean: False
+  img_aug: 0.0
+
+# --- Rotation head: 6D continuous regression (Zhou et al., CVPR 2019), mirroring RMBench ---
+# "6d" -> train.py sets rot_ver=2 and feat_dim=10; the rotation is regressed as a 6D vector ->
+# Gram-Schmidt -> SO(3), supervised by a Frobenius loss to the GT matrix. "euler_disc" restores the discrete head.
+rotation_representation: "6d"
+
+# --- Per-step ignore-collisions supervision: disabled for MemoryBench ---
+# The demos do carry obs.ignore_collisions, but it is a fixed per-task template: a single (task, step_idx)
+# lookup reproduces 99.97% of the labels, and both inputs are already given to the model — so the head just
+# memorises the table. Eval never uses the bit either (collision_checking=False, 8-dim action,
+# ignore_collisions=True every step). The label is dropped end to end. The feat head's width is unchanged
+# (6+2+2=10), so previously trained ckpts load and evaluate bit-for-bit as before.
+predict_collision: false
+
+# --- Rotation/grip/collision feature source: STAGE 1 (coarse), mirroring RMBench ---
+# true -> those heads read stage-1 features and stage 2 emits only the translation heatmap; translation
+# precision is unchanged. false -> the original stage-2 (fine zoom) source.
+feat_from_stage1: true
+
+# --- Episodic memory (aligned with RMBench logic) ---
+# memory.enabled MUST be true for MemoryBench: the tasks are spatial-memory benchmarks, and without
+# anchor + history the agent has nothing to remember.
+# Content = frame-0 anchor + the two most-recent EXECUTED keyframes, matching RMBench's keyframe_gt layout.
+# The real data has no subtask-boundary label, so the discriminator is disabled and nothing is admitted into
+# slots 2..K-1 — and k_temporal=2 leaves none anyway.
+memory:
+  enabled: true
+  # M = max temporal memory slots. k_temporal=2 -> only the two recency slots (t-1, t-2). Raise it only if
+  # the discriminator is later enabled with real labels.
+  k_temporal: 2
+  # Frame-selection policy (matches RMBench): slots 0/1 = the two most-recent executed keyframes;
+  # slots 2..K-1 would hold discriminator-admitted boundaries (none here).
+  select: keyframe_gt
+  spatial_at_mvt1: true
+  spatial_at_mvt2: true
+  temporal_at_mvt1: true
+  # --- Memory ablation switches (memory only; the stage1/stage2 mvt flow is unchanged) ---
+  #   temporal_memory -> stage-1 memory: the temporal block + the stage-1 anchor frame.
+  #   spatial_memory  -> stage-2 memory: the local per-view anchor frame.
+  # Training: `bash train.sh --temporal_memory false` overrides these and appends _no_temporal_mem /
+  # _no_spatial_mem / _no_mem to the run name. Eval: run_server.sh / run_client.sh must declare the same
+  # switches as the loaded ckpt's mvt_cfg.yaml; the client re-checks against the server at startup.
+  temporal_memory: true
+  spatial_memory: true
+  share_spatial_across_stages: false
+  heads: 8
+  dim_head: 128
+  num_layers: 2
+  ffn_mult: 2
+  use_fast_attn: false
+  # True (default): the anchor / history forwards build a graph and their KV is not detached, so gradient
+  # flows from the memory branch back into PaliGemma. False restores the legacy no_grad + detached path.
+  # Eval is unaffected (cache path + inference no_grad).
+  grad_through_tokens: true
+  # --- Keyframe discriminator: DISABLED for MemoryBench ---
+  # The real data carries no "is-subtask-boundary" label to supervise it with, so the eval admission gate
+  # defaults to false and the temporal memory stays anchor + the two recency frames.
+  discriminator:
+    enabled: false
+
+# No grounding co-training block: MemoryBench is a pure action-finetune benchmark.

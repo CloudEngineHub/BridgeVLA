@@ -1,0 +1,38 @@
+# Per-task max keyframe-steps (step_limit) for Colosseum evaluation.
+#
+# Same mechanism as RLBench/configs/eval_step_limit.yml: before each task eval.py writes the value
+# here into both the rollout loop length and the env's time_in_state normalisation denominator.
+# This table is looked up by BASE task name (without the _<variation> suffix); eval.py tries the base
+# name first, then the full "<task>_<var>" name, and only then falls back to the --episode-length CLI flag.
+#
+# Semantics: one step = one keyframe prediction (the agent predicts the next gripper pose and the
+# planner executes it). Hitting this limit without success counts as a timeout failure.
+#
+# Override priority: a non-null value for the task in this table > the --episode-length CLI flag (the fallback default).
+# To let a task fall back to the global default, set its value to null.
+#
+# Aligned with the original BridgeVLA: its eval.sh passes no per-task step count and everything uses
+# get_eval_parser's --episode-length default of 25 (all 20 tasks get 25 steps), which is also the
+# protocol its cal_statics.py reports. So every entry here stays at 25 with no per-task extension
+# (35 was tried for setup_chess / wipe_desk / straighten_rope and reverted to 25 for alignment).
+
+basketball_in_hoop: 25
+close_box: 25
+close_laptop_lid: 25
+empty_dishwasher: 25
+get_ice_from_fridge: 25
+hockey: 25
+insert_onto_square_peg: 25
+meat_on_grill: 25
+move_hanger: 25
+open_drawer: 25
+place_wine_at_rack_location: 25
+put_money_in_safe: 25
+reach_and_drag: 25
+scoop_with_spatula: 25
+setup_chess: 25
+slide_block_to_target: 25
+stack_cups: 25
+straighten_rope: 25
+turn_oven_on: 25
+wipe_desk: 25

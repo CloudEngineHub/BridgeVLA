@@ -1,0 +1,99 @@
+# --- General ---
+exp_name: pretrain
+output_dir: data/bridgevla_data/logs/pretrain
+img_size: 224
+img_patch_size: 14
+# RNG seed applied (with rank offset) to random / torch / numpy /
+# DistributedSampler / DataLoader workers. Also seeds the train/val split.
+seed: 42
+
+# --- Data ---
+# The RoboPoint detection corpus: (image, referring phrase, bbox(es)).
+# Each sample becomes an image → 224x224 center-crop, a grasp/detect prompt
+# template around the phrase, and bboxes in [0, 1] cxcywh of the crop.
+# Both paths can be overridden on the CLI (--image_folder /
+# --json_detection_path).
+image_folder: data/bridgevla_data/pretrain_data
+json_detection_path: data/bridgevla_data/pretrain_data/detection_data.json
+
+# --- Optimisation ---
+bs: 4
+lr: 1e-4
+# AdamW weight_decay is DERIVED: weight_decay = weight_decay_lr_ratio * lr.
+# Applied uniformly to all param groups. Set the ratio to 0 to disable.
+weight_decay_lr_ratio: 0.1
+num_train_epochs: 10
+# Fractional allowed (e.g. 0.5 = transition half-way through epoch 0).
+freeze_epochs: 0.1
+# Gradient accumulation: number of micro-iterations per optimizer step.
+# Effective batch = bs × world_size × grad_accumulation_steps. All step-
+# counted schedules (lr_warmup_steps, freeze_threshold, logging_steps) are
+# interpreted in MACRO (= optimizer-step) units, so changing this value does
+# NOT silently rescale them. DDP all-reduce is bundled into the final micro
+# of each macro via no_sync(), so accum=4 costs ~1× the all-reduce traffic of
+# accum=1 instead of 4×. Trailing partial macro at end of epoch is dropped to
+# keep gradient scale uniform across all macros.
+grad_accumulation_steps: 4
+# Single linear LR warmup over CUMULATIVE MACRO steps (= optimizer steps,
+# does NOT reset at Stage2). Accepts legacy `warmup_steps` as a fallback.
+lr_warmup_steps: 2000
+# Scale applied to the PaliGemma Gemma-2B transformer body + final norm and
+# the multi_modal_projector. lm_head / embed_tokens stay at 1.0×. Only takes
+# effect once the Gemma body is unfrozen at Stage 2.
+paligemma_lr_scale: 0.4
+dataloader_num_workers: 8
+
+# --- Validation (run at the start of every epoch) ---
+# `holdout_samples` rows are carved off the RoboPoint corpus with a seeded
+# shuffle (identical on every rank) and excluded from training. They go
+# through the same collator, and the forward is evaluated for:
+#   val/point_hit  : argmax(heatmap) falls inside any GT bbox (primary metric)
+#   val/center_l1  : L1 pixel distance from argmax to nearest GT bbox center
+#   val/loss_hm    : heatmap CE (matches train loss_hm)
+# Set holdout_samples to 0 to disable validation entirely.
+val:
+  holdout_samples: 1024
+  # How many qualitative samples to render per epoch (rank 0 only, after the
+  # DDP metric pass). Each save is a 4-panel PNG (image+GT bbox / image+GT hm /
+  # raw pred logits / image+pred hm) with the VLM prompt as the caption.
+  # Output: <output_path>/val_viz/epoch_{N:03d}/sample_{i:02d}.png
+  n_viz_samples: 10
+
+# --- Episodic memory (spatial anchor + temporal episodic) ---
+# Mirrors finetune/GemBench/configs/gembench_config.yaml::memory and
+# finetune/bridgevla/mvt/mvt_single.py. The blocks only ever see action rows
+# (is_action=True), and the RoboPoint corpus has none — so leave this off
+# unless you extend the data pipeline with an action source. Enabling it
+# here would build untrained mem_* modules into the checkpoint.
+memory:
+  enabled: false
+  k_temporal: 4
+  spatial_at_mvt1: true
+  temporal_at_mvt1: true
+  heads: 8
+  dim_head: 128
+  num_layers: 2
+  ffn_mult: 2
+  use_fast_attn: false
+
+# --- Modified focal loss + dual-head post-processing ---
+# False (default) = original BridgeVLA softmax + soft-label cross-entropy.
+# True swaps in CenterNet-style peak-1 Gaussian GT + per-pixel sigmoid focal
+# loss.
+use_modified_focal_loss: false
+
+# --- Pretrain LM auxiliary loss ---
+# False (default) = original BridgeVLA pretrain (no LM CE on suffix tokens).
+# RoboPoint rows carry no LM suffix, so this has nothing to supervise —
+# it only becomes meaningful if you add a source that emits one.
+use_lm_aux_loss: false
+
+# --- Logging / saving ---
+# Saves pretrain_epoch_{i}.pth + pretrain_last.pth pointer each epoch.
+# logging_steps is in MACRO steps (= optimizer steps), so with
+# grad_accumulation_steps=4 the actual log/swanlab cadence is every
+# logging_steps × 4 micro-iters.
+logging_steps: 10
+save_total_limit: 30        # keep last N epoch checkpoints (0 = keep all)
+
+swanlab_project: bridgevla_pretrain

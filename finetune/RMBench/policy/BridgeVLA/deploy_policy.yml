@@ -1,0 +1,11 @@
+# Basic experiment configuration (keep unchanged)
+policy_name: null
+task_name: null
+task_config: null
+ckpt_setting: null      # <model dir containing model_*.pth + exp_cfg.yaml + mvt_cfg.yaml>  OR  a direct .pth
+seed: null
+instruction_type: seen
+
+# BridgeVLA-specific
+model_epoch: last       # picks model_<epoch>.pth, falling back to model_last.pth
+device: 0

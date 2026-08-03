@@ -1,0 +1,126 @@
+diff --git a/rlbench/action_modes/arm_action_modes.py b/rlbench/action_modes/arm_action_modes.py
+index 2183f22..02c8732 100644
+--- a/rlbench/action_modes/arm_action_modes.py
++++ b/rlbench/action_modes/arm_action_modes.py
+@@ -221,7 +221,8 @@ class EndEffectorPoseViaPlanning(ArmActionMode):
+     def set_callable_each_step(self, callable_each_step):
+         self._callable_each_step = callable_each_step
+ 
+-    def action(self, scene: Scene, action: np.ndarray):
++    def action(self, scene: Scene, action: np.ndarray,
++               ignore_collisions: bool = None):
+         assert_action_shape(action, (7,))
+         assert_unit_quaternion(action[3:])
+         if not self._absolute_mode and self._frame != 'end effector':
+@@ -229,8 +230,15 @@ class EndEffectorPoseViaPlanning(ArmActionMode):
+         relative_to = None if self._frame == 'world' else scene.robot.arm.get_tip()
+         self._quick_boundary_check(scene, action)
+ 
++        # RVT/PerAct thread a per-step ignore_collisions (the model's predicted
++        # collision flag) through EndEffectorPoseViaPlanning2.action(). When not
++        # supplied, fall back to the construction-time _collision_checking so
++        # existing fork callers keep their original behaviour.
++        if ignore_collisions is None:
++            ignore_collisions = not self._collision_checking
++
+         colliding_shapes = []
+-        if self._collision_checking:
++        if not ignore_collisions:
+             if self._robot_shapes is None:
+                 self._robot_shapes = scene.robot.arm.get_objects_in_tree(
+                     object_type=ObjectType.SHAPE)
+@@ -253,7 +261,7 @@ class EndEffectorPoseViaPlanning(ArmActionMode):
+             path = scene.robot.arm.get_path(
+                 action[:3],
+                 quaternion=action[3:],
+-                ignore_collisions=not self._collision_checking,
++                ignore_collisions=ignore_collisions,
+                 relative_to=relative_to,
+                 trials=100,
+                 max_configs=10,
+diff --git a/rlbench/backend/const.py b/rlbench/backend/const.py
+index 161f47d..bbfcbdb 100644
+--- a/rlbench/backend/const.py
++++ b/rlbench/backend/const.py
+@@ -18,9 +18,11 @@ FRONT_MASK_FOLDER = 'front_mask'
+ EPISODES_FOLDER = 'episodes'
+ EPISODE_FOLDER = 'episode%d'
+ VARIATIONS_FOLDER = 'variation%d'
++VARIATIONS_ALL_FOLDER = 'all_variations'
+ 
+ LOW_DIM_PICKLE = 'low_dim_obs.pkl'
+ VARIATION_DESCRIPTIONS = 'variation_descriptions.pkl'
++VARIATION_NUMBER = 'variation_number.pkl'
+ 
+ TTT_FILE = 'task_design.ttt'
+ 
+diff --git a/rlbench/backend/observation.py b/rlbench/backend/observation.py
+index 896d4e8..c74a6e1 100644
+--- a/rlbench/backend/observation.py
++++ b/rlbench/backend/observation.py
+@@ -34,7 +34,8 @@ class Observation(object):
+                  gripper_joint_positions: np.ndarray,
+                  gripper_touch_forces: np.ndarray,
+                  task_low_dim_state: np.ndarray,
+-                 misc: dict):
++                 misc: dict,
++                 ignore_collisions: np.ndarray = None):
+         self.left_shoulder_rgb = left_shoulder_rgb
+         self.left_shoulder_depth = left_shoulder_depth
+         self.left_shoulder_mask = left_shoulder_mask
+@@ -65,6 +66,14 @@ class Observation(object):
+         self.gripper_touch_forces = gripper_touch_forces
+         self.task_low_dim_state = task_low_dim_state
+         self.misc = misc
++        # The PerAct/RVT stack (YARR _extract_obs, peract_colab) reads
++        # obs.ignore_collisions on every observation, but this rjgpinel fork's
++        # live Scene.get_observation() never sets it. Default it so live eval
++        # obses carry the field. Value is inert at eval time: ignore_collisions
++        # is a model *output* (predicted collision flag), not a policy input —
++        # act() never reads it. Stored demos keep their own per-keyframe value.
++        self.ignore_collisions = (
++            np.array(1.0) if ignore_collisions is None else ignore_collisions)
+ 
+     def get_low_dim_data(self) -> np.ndarray:
+         """Gets a 1D array of all the low-dimensional obseervations.
+diff --git a/rlbench/utils.py b/rlbench/utils.py
+index 2b4f8c8..3601c52 100644
+--- a/rlbench/utils.py
++++ b/rlbench/utils.py
+@@ -50,10 +50,15 @@ def get_stored_demos(amount: int, image_paths: bool, dataset_root: str,
+         raise RuntimeError("Can't find the demos for %s at: %s" % (
+             task_name, task_root))
+ 
+-    # Sample an amount of examples for the variation of this task
+-    examples_path = join(
+-        task_root, VARIATIONS_FOLDER % variation_number,
+-        EPISODES_FOLDER)
++    # Sample an amount of examples for the variation of this task.
++    # variation_number == -1 is the PerAct "all variations" sentinel: demos are
++    # stored flat under all_variations/episodes (each demo pickle carries its own
++    # variation_number, used by the caller to reset the sim). Match the peract
++    # RLBench fork here; the plain 'variation%d' layout is kept for other cases.
++    variation_folder = (
++        VARIATIONS_ALL_FOLDER if variation_number == -1
++        else VARIATIONS_FOLDER % variation_number)
++    examples_path = join(task_root, variation_folder, EPISODES_FOLDER)
+     examples = listdir(examples_path)
+     if amount == -1:
+         amount = len(examples)
+@@ -73,6 +78,16 @@ def get_stored_demos(amount: int, image_paths: bool, dataset_root: str,
+         example_path = join(examples_path, example)
+         with open(join(example_path, LOW_DIM_PICKLE), 'rb') as f:
+             obs = pickle.load(f)
++
++        # The pickled Demo carries a stale variation_number=0 stamped at data
++        # generation time; the real value lives in the per-episode
++        # variation_number.pkl (peract layout). Without this override every
++        # eval episode resets to variation 0.
++        if variation_number == -1:
++            with open(join(example_path, VARIATION_NUMBER), 'rb') as f:
++                obs.variation_number = pickle.load(f)
++        else:
++            obs.variation_number = variation_number
+         if load_images:
+             l_sh_rgb_f = join(example_path, LEFT_SHOULDER_RGB_FOLDER)
+             l_sh_depth_f = join(example_path, LEFT_SHOULDER_DEPTH_FOLDER)

@@ -1,0 +1,101 @@
+# ===== Large assets / data / sim binaries =====
+# data/ is the user-provided data and weights root (see README); both spellings are listed so that
+# the directory and a symlink of the same name are matched.
+/data
+/data/
+finetune/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04
+finetune/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04/
+finetune/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04.tar.xz
+
+# PyRep / RLBench are not tracked: the install scripts clone pinned commits and apply the patches in
+# bridgevla/libs/rlbench_patches/ (see its README.md).
+finetune/bridgevla/libs/PyRep/
+finetune/bridgevla/libs/RLBench/
+# The RLBench-benchmark-specific 587a6a0 stack, built by install_rlbench.sh
+# (upstream clone + the finetune/RLBench/rlbench_patch_bundle patches)
+finetune/bridgevla/libs/RLBench_peract587/
+finetune/bridgevla/libs/PyRep_stepjam231/
+
+# RMBench data/assets live under the data/ root (RMBENCH_DATA_PATH / RMBENCH_ASSETS_PATH)
+finetune/RMBench/data/
+finetune/RMBench/assets/
+# curobo is cloned and pip -e installed by the RMBench install script; not tracked
+finetune/RMBench/envs/curobo/
+
+# ===== Training outputs / logs =====
+finetune/RLBench/train/
+finetune/RLBench/wandb/
+finetune/Colosseum/train/
+finetune/Colosseum/wandb/
+finetune/GemBench/train/
+finetune/GemBench/wandb/
+finetune/real/logs/
+finetune/real/logs_real
+finetune/real/logs_real/
+wandb/
+*.log
+.cache/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ===== Checkpoints / weights =====
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+
+# ===== Media (ignored by default, explicitly allow-listed) =====
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.mp4
+!assets/architecture.png
+# robot-colosseum's textures/model skins are assets the simulation needs to run
+!finetune/Colosseum/robot-colosseum/**/*.png
+!finetune/Colosseum/robot-colosseum/**/*.jpg
+!finetune/Colosseum/robot-colosseum/**/*.jpeg
+!finetune/Colosseum/robot-colosseum/**/*.gif
+!finetune/bridgevla/libs/peract/**/*.png
+!finetune/bridgevla/libs/peract/**/*.gif
+!finetune/bridgevla/libs/peract_colab/**/*.png
+!finetune/bridgevla/libs/YARR/logo.png
+!finetune/bridgevla/libs/point-renderer/*.png
+!finetune/RMBench/**/*.png
+!finetune/RMBench/**/*.jpg
+
+# ===== Native build artifacts (PyRep / point_renderer / YARR etc.) =====
+*.so
+*.o
+*.a
+*.dylib
+*.dll
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+*.tar.gz
+
+# ===== Local scratch =====
+*.tmp
+tmp/
+scratch/
+
+# ===== Editors / OS =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~

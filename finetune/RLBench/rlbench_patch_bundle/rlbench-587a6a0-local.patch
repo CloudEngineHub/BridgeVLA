@@ -1,0 +1,61 @@
+diff --git a/rlbench/environment.py b/rlbench/environment.py
+index eb2e8994..9ff0d404 100644
+--- a/rlbench/environment.py
++++ b/rlbench/environment.py
+@@ -150,13 +150,15 @@ class Environment(object):
+                   variation_number=0,
+                   image_paths=False,
+                   random_selection: bool = True,
+-                  from_episode_number: int = 0) -> List[Demo]:
++                  from_episode_number: int = 0,
++                  load_images: bool = True) -> List[Demo]:
+         if self._dataset_root is None or len(self._dataset_root) == 0:
+             raise RuntimeError(
+                 "Can't ask for a stored demo when no dataset root provided.")
+         demos = utils.get_stored_demos(
+             amount, image_paths, self._dataset_root, variation_number,
+-            task_name, self._obs_config, random_selection, from_episode_number)
++            task_name, self._obs_config, random_selection, from_episode_number,
++            load_images=load_images)
+         return demos
+ 
+     def get_task_descriptions_with_episode(self, task_name: str,
+diff --git a/rlbench/utils.py b/rlbench/utils.py
+index f8bd378b..c38aebcc 100644
+--- a/rlbench/utils.py
++++ b/rlbench/utils.py
+@@ -42,7 +42,8 @@ def get_stored_demos(amount: int, image_paths: bool, dataset_root: str,
+                      variation_number: int, task_name: str,
+                      obs_config: ObservationConfig,
+                      random_selection: bool = True,
+-                     from_episode_number: int = 0) -> List[Demo]:
++                     from_episode_number: int = 0,
++                     load_images: bool = True) -> List[Demo]:
+ 
+     task_root = join(dataset_root, task_name)
+     if not exists(task_root):
+@@ -98,6 +99,12 @@ def get_stored_demos(amount: int, image_paths: bool, dataset_root: str,
+         else:
+             descriptions = ["unknown task description"]
+ 
++        if not load_images:
++            for i in range(len(obs)):
++                obs[i].misc['descriptions'] = descriptions
++            demos.append(obs)
++            continue
++
+         l_sh_rgb_f = join(example_path, LEFT_SHOULDER_RGB_FOLDER)
+         l_sh_depth_f = join(example_path, LEFT_SHOULDER_DEPTH_FOLDER)
+         l_sh_mask_f = join(example_path, LEFT_SHOULDER_MASK_FOLDER)
+diff --git a/setup.py b/setup.py
+index ee6aa4b6..caa38c3d 100644
+--- a/setup.py
++++ b/setup.py
+@@ -33,6 +33,7 @@ setup(name='rlbench',
+       url='https://www.doc.ic.ac.uk/~slj12',
+       packages=[
+             'rlbench',
++            'rlbench.action_modes',
+             'rlbench.backend',
+             'rlbench.tasks',
+             'rlbench.task_ttms',

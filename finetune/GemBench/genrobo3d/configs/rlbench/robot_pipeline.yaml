@@ -1,0 +1,37 @@
+pipeline:
+    restart: True
+    real_robot: False
+
+llm_planner:
+    # prompt_dir: 'prompts/rlbench'
+    master_port: 12300
+    use_groundtruth: True
+
+    gt_plan_file: 'prompts/rlbench/in_context_examples.txt'
+    taskvar_instr_file: 'assets/taskvars_instructions_new.json'
+
+    # Only read when use_groundtruth is False, i.e. when you run the upstream
+    # 3D-LoTUS++ LLM task planner instead of the ground-truth plans. BridgeVLA++
+    # never loads it. Fill in YOUR OWN absolute path to a local Llama-3-8B-Instruct
+    # snapshot before flipping use_groundtruth to False:
+    #     ckpt_dir: /abs/path/to/your/Meta-Llama-3-8B-Instruct
+    ckpt_dir: ''
+    groq_model: null
+    cache_file: null
+    prompt_dir: 'prompts/rlbench'
+    asset_dir: 'assets'
+
+object_grounding:
+    use_groundtruth: False
+
+motion_planner:
+    expr_dir: 'data/experiments/gembench/3dlotusplus/v1'
+    ckpt_step: 150000
+    run_action_step: 1 
+    pc_label_type: coarse
+
+    # automatically setup
+    checkpoint: ''
+    config_file: ''
+    pred_dir: ''
+    save_obs_outs: False

@@ -1,0 +1,106 @@
+exp_id: debug
+tasks: all    # comma-separated task names, or "all" for RLBENCH_TASKS (18 tasks)
+bs: 4
+num_workers: 3
+epochs: 180
+save_every_n_epochs: 5   # >0: save every N epochs (skip epoch 0) + final epoch; 0: disable saving
+# false (default) -> weights only (smaller files), resume restarts the optimizer at global_step=0;
+# true -> also store optimizer state + global_step + freeze_epochs for an exact resume.
+save_optimizer_state: false
+
+# --- Multi-task sampling balance ---
+# The keyframe dataset flattens episodes into per-(task, ep, step) transitions, so a uniform sampler draws
+# each task proportional to its transition count. mode=temperature draws task t with prob ∝ n_t**alpha:
+# alpha=1 = transition-uniform (old behavior), 0 = task-uniform, 0.5 = tempered. A no-op for single-task runs.
+task_sampling:
+  mode: temperature
+  alpha: 0.3
+# --- Two-stage training: Stage 1 (epoch < freeze_epochs) freezes PaliGemma and trains heads + feat_fc +
+# memory blocks; Stage 2 unfreezes the backbone. ---
+freeze_epochs: 4
+warmup_steps:  1500    # linear warmup per stage, no LR decay
+
+# --- Per-epoch heatmap visualization (mirrors GemBench) ---
+# Samples ONE episode per task from the training keyframe dataset and dumps, for every step, the pred+GT
+# translation heatmaps plus the stage-1 / stage-2 memory grids.
+viz_every_n_epochs: 2000
+# initial_viz: true -> also run the viz pass at epoch 0 (a pre-training baseline).
+initial_viz: false
+# null -> all tasks; [] -> disable viz; ["task_a", ...] -> only those tasks.
+viz_tasks: null
+
+swanlab_project: "bridgevla_plus_rlbench"
+swanlab_run: "rlbench_all"
+# Fallback only — train.sh passes --log_dir ${BRIDGEVLA_LOG_DIR}, derived from the repository location.
+log_dir: "data/bridgevla_data/logs"  # fallback; train.sh overrides it with --log_dir ${BRIDGEVLA_LOG_DIR}
+
+# --- PaliGemma activation checkpointing: essential when memory.grad_through_tokens=true (anchor + K history
+# forwards add extra graphs). Propagated onto mvt_cfg before MVT() is built. ---
+gradient_checkpointing: true
+
+# --- Rotation head: 6D continuous regression (Zhou et al., CVPR 2019), mirroring RMBench / real ---
+# "6d" -> train.py sets rot_ver=2 and feat_dim=10; the rotation is regressed as a 6D vector ->
+# Gram-Schmidt -> SO(3), supervised by a Frobenius loss to the GT matrix. "euler_disc" restores the discrete head.
+rotation_representation: "6d"
+
+# --- Rotation/grip/collision feature source: STAGE 1 (coarse), mirroring RMBench / real ---
+# true -> those heads read stage-1 features and stage 2 emits only the translation heatmap; translation
+# precision is unchanged. false -> the original stage-2 source.
+feat_from_stage1: true
+
+# --- Episodic memory (spatial anchor + temporal episodic), mirroring RMBench / MemoryBench / real ---
+# Spatial Anchor (stage1+stage2) cross-attends current PaliGemma tokens against the episode's frame-0
+# tokens; Temporal Episodic (stage1 only) against the K most-recent keyframes (per-slot learned index PE).
+# Content = frame-0 anchor + the two most-recent EXECUTED keyframes. RLBench has no subtask-boundary label,
+# so the discriminator head is built but trained against an all-zero mem_label and never admits anything.
+memory:
+  enabled: true
+  # M = max temporal memory slots (mirrors RMBench/real). Only the two recency slots are ever populated.
+  # TPAMI Table V reports the EFFECTIVE budget K=2: slots 2..11 stay masked out of the cross-attn softmax, so
+  # the forward is numerically identical to k_temporal=2. Kept at 12 to match the trained checkpoints.
+  k_temporal: 12
+  select: keyframe_gt
+  spatial_at_mvt1: true
+  spatial_at_mvt2: true
+  temporal_at_mvt1: true
+  # --- Memory ablation switches (memory only; the stage1/stage2 mvt flow is unchanged) ---
+  #   temporal_memory -> stage-1 memory: the temporal block + the stage-1 anchor frame.
+  #   spatial_memory  -> stage-2 memory: the local per-view anchor frame.
+  # Training: `bash train.sh --temporal_memory false` overrides these and appends _no_temporal_mem /
+  # _no_spatial_mem / _no_mem to the run name. Eval: eval.sh's switches must match the loaded ckpt's
+  # mvt_cfg.yaml. With temporal_memory=false the discriminator is force-disabled, keeping the ablation clean.
+  temporal_memory: true
+  spatial_memory: true
+  share_spatial_across_stages: false
+  heads: 8
+  dim_head: 128
+  num_layers: 2
+  ffn_mult: 2
+  use_fast_attn: false
+  grad_through_tokens: true
+  # Keyframe discriminator: built, but supervised to a constant negative (mem_label is always 0).
+  discriminator:
+    enabled: true
+    input: current
+    heads: 8
+    hidden: 512
+    loss_weight: 1.0
+    pos_weight: 1.0
+    threshold: 0.5
+
+peract:
+  lr: 8e-5
+  optimizer_type: "adamw"
+  weight_decay: 0.01
+  betas: [0.9, 0.95]
+  transform_augmentation_xyz: [0.125, 0.125, 0.125]
+  transform_augmentation_rpy: [0.0, 0.0, 45.0]
+rvt:
+  # MUST be False with memory enabled: cached anchor tokens are extracted under the step-0 cube.
+  place_with_mean: False
+  # MUST be 0.0 with memory enabled: anchor/history renders use img_aug=0, so a non-zero current-frame value
+  # breaks per-pixel current<->memory correspondence (the agent asserts this).
+  img_aug: 0.0
+
+# Same rationale as rvt.img_aug: img_aug_2 hits only the current render, while anchor/history stay deterministic.
+img_aug_2: 0.0
