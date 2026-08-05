@@ -8,8 +8,6 @@ A 3D VLA framework that aligns inputs and outputs in a shared 2D heatmap space, 
 
 </div>
 
-> 🔀 **Looking for the original BridgeVLA (NeurIPS 2025)?** Its code and README are preserved unchanged on the [`bridgevla` branch](https://github.com/BridgeVLA/BridgeVLA/tree/bridgevla) of this repo; this `main` branch hosts BridgeVLA++.
-
 ## 🔥 News
 
 * **`2026.08.05`** 🌟 BridgeVLA++ is released: training & evaluation code for **five simulation benchmarks** (RLBench, COLOSSEUM, GemBench, memoryBench, RMBench) and **real robot embodiments**, with checkpoints on HuggingFace / ModelScope.
@@ -87,7 +85,6 @@ bash scripts/download_checkpoints_hf.sh pretrain_data paligemma    # re-run grou
 * Each benchmark's checkpoint is just its target name — swap `rlbench` for `colosseum` / `gembench` / `memorybench` / `rmbench` (or `rmbench:<task>` for a single task). Download only what you need — `all` is ~120 GiB.
 * Run the exact same arguments with `scripts/download_checkpoints_ms.sh` to pull from ModelScope instead.
 * Downloads resume, and files land exactly where the train/eval scripts look.
-* `paligemma` is gated on [HuggingFace](https://huggingface.co/google/paligemma-3b-pt-224) (accept the license on its model page and `hf auth login` first).
 
 ### Benchmark datasets (third-party)
 
@@ -98,8 +95,8 @@ bash scripts/download_datasets.sh --extract gembench         # GemBench     162 
 bash scripts/download_datasets.sh --extract memorybench      # memoryBench   22 GiB  (+2.3 GiB keyframe cache)
 bash scripts/download_datasets.sh --extract rmbench          # RMBench      ~31 GiB  (assets + keyframe data)
 
-# COLOSSEUM evaluation additionally needs the per-task variation archives (~186 GiB):
-bash scripts/download_datasets.sh --extract colosseum_eval
+# COLOSSEUM evaluation additionally needs per-task variation archives (186 GiB for all — restrict to your tasks):
+COLOSSEUM_EVAL_TASKS="close_box open_drawer" bash scripts/download_datasets.sh --extract colosseum_eval
 ```
 
 * Run only your benchmark's row. Evaluation replays the released *test* episodes from the same tree, so eval needs the data too.
