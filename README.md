@@ -197,7 +197,7 @@ This repository is released under **Apache-2.0** (see `LICENSE`); vendored third
   author  = {},
   journal = {},
   year    = {2026},
-  note    = {Extension of the NeurIPS 2025 paper BridgeVLA}
+  note    = {}
 }
 
 @misc{li2025bridgevla,
