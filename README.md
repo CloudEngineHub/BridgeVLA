@@ -12,7 +12,7 @@ A 3D VLA framework that aligns inputs and outputs in a shared 2D heatmap space, 
 
 ## 🔥 News
 
-* **`2026.08`** 🌟 BridgeVLA++ is released: training & evaluation code for **five simulation benchmarks** (RLBench, COLOSSEUM, GemBench, memoryBench, RMBench) and **real robot embodiments**, with checkpoints on HuggingFace / ModelScope. arXiv coming soon.
+* **`2026.08.05`** 🌟 BridgeVLA++ is released: training & evaluation code for **five simulation benchmarks** (RLBench, COLOSSEUM, GemBench, memoryBench, RMBench) and **real robot embodiments**, with checkpoints on HuggingFace / ModelScope.
 * **`2025.09.20`** 🌟 BridgeVLA was accepted by NeurIPS 2025! 🥳🥳🥳
 * **`2025.06.15`** 🌟 We introduced [BridgeVLA](https://github.com/BridgeVLA/BridgeVLA/tree/bridgevla), which bridges VLM backbones and VLAs by aligning input and output in a shared 2D space.
 
@@ -137,7 +137,7 @@ Each command evaluates the benchmark's released checkpoint on its full test set:
 ```bash
 bash finetune/RLBench/eval.sh                                # RLBench
 bash finetune/Colosseum/eval.sh                              # COLOSSEUM
-bash finetune/RMBench/policy/BridgeVLA/eval_double_env.sh    # RMBench
+bash finetune/RMBench/policy/BridgeVLA_Plus/eval_double_env.sh  # RMBench
 ```
 
 GemBench and memoryBench run as a server + a client, in two terminals:
@@ -198,7 +198,7 @@ This repository is released under **Apache-2.0** (see `LICENSE`); vendored third
   author  = {},
   journal = {},
   year    = {2026},
-  note    = {arXiv coming soon}
+  note    = {Extension of the NeurIPS 2025 paper BridgeVLA}
 }
 
 @misc{li2025bridgevla,

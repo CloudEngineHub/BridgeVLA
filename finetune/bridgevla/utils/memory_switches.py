@@ -1,6 +1,6 @@
 """Memory-ablation switch helpers shared by the eval entry points
 (GemBench server / RLBench eval). Mirrors the RMBench eval_config guard
-(RMBench/policy/BridgeVLA/bridgevla_rmbench_model.py).
+(RMBench/policy/BridgeVLA_Plus/bridgevla_rmbench_model.py).
 
 The two master switches live in the training yaml (memory.temporal_memory /
 memory.spatial_memory) and are baked into the checkpoint's dumped

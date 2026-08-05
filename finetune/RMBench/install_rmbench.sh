@@ -16,7 +16,7 @@
 #   bash finetune/RMBench/install_rmbench.sh
 #
 # The `bridgevla_plus_rmbench` env runs ONLY the SAPIEN side (data collection
-# + the eval client in policy/BridgeVLA/eval_double_env.sh). The BridgeVLA++
+# + the eval client in policy/BridgeVLA_Plus/eval_double_env.sh). The BridgeVLA++
 # policy side — training (finetune/RMBench_vla/train.sh) and the eval policy
 # server — runs in the shared policy env from STEP 0 (also used by GemBench /
 # memoryBench; a full GemBench install lands in the same env).
@@ -202,7 +202,7 @@ Done. Next steps:
      should you ever add one, shares the same env).
   3) Train / evaluate:
        bash finetune/RMBench_vla/train.sh
-       bash finetune/RMBench/policy/BridgeVLA/eval_double_env.sh
+       bash finetune/RMBench/policy/BridgeVLA_Plus/eval_double_env.sh
 
 Notes / gotchas:
   * To run the simulator you must set the Vulkan ICD env var

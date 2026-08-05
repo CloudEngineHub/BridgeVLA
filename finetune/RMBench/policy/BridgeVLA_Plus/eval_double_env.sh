@@ -47,7 +47,7 @@
 #   stage2_sparsePC_force_center=1  fall back to the stage-1 translation (the zoom centre) when the zoom has too few points
 #                                   (=0 disables that fallback and always uses the mvt2 translation).
 
-policy_name=BridgeVLA
+policy_name=BridgeVLA_Plus
 
 # Uniform bool environment-variable parsing: 1/true/yes/on => 1, anything else => 0
 to_bool01() {
@@ -205,7 +205,7 @@ echo -e "\033[36m[eval] tasks(${#TASKS[@]}): ${TASKS[*]}\033[0m"
 echo -e "\033[36m[eval] config frozen at start -> ${EVAL_CONFIG_SNAPSHOT}\033[0m"
 
 # Server needs bridgevla on PYTHONPATH (model code + RMBench_vla utils).
-SERVER_PYTHONPATH="${FINETUNE_DIR}/RMBench_vla:${FINETUNE_DIR}:${FINETUNE_DIR}/RMBench/policy/BridgeVLA:${FINETUNE_DIR}/bridgevla/libs/point-renderer:${FINETUNE_DIR}/bridgevla/libs/peract_colab:${FINETUNE_DIR}/bridgevla/libs/YARR:${FINETUNE_DIR}/bridgevla/libs/peract:${FINETUNE_DIR}/GemBench"
+SERVER_PYTHONPATH="${FINETUNE_DIR}/RMBench_vla:${FINETUNE_DIR}:${FINETUNE_DIR}/RMBench/policy/BridgeVLA_Plus:${FINETUNE_DIR}/bridgevla/libs/point-renderer:${FINETUNE_DIR}/bridgevla/libs/peract_colab:${FINETUNE_DIR}/bridgevla/libs/YARR:${FINETUNE_DIR}/bridgevla/libs/peract:${FINETUNE_DIR}/GemBench"
 
 # Find a free port.
 FREE_PORT=$(python3 - << 'EOF'

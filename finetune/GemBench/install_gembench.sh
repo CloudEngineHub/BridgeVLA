@@ -320,7 +320,7 @@ runtime: pip stack + point-renderer build — no CoppeliaSim / RLBench / PyRep.
 
 It serves the RMBench policy side out of the box:
     bash finetune/RMBench_vla/train.sh                         # training
-    bash finetune/RMBench/policy/BridgeVLA/eval_double_env.sh  # eval (the
+    bash finetune/RMBench/policy/BridgeVLA_Plus/eval_double_env.sh  # eval (the
         launcher starts the policy server in this env and the SAPIEN client
         in the env from finetune/RMBench/install_rmbench.sh)
 
