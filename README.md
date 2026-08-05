@@ -8,6 +8,8 @@ A 3D VLA framework that aligns inputs and outputs in a shared 2D heatmap space, 
 
 </div>
 
+> 🔀 **Looking for the original BridgeVLA (NeurIPS 2025)?** Its code and README live on the [`bridgevla` branch](https://github.com/BridgeVLA/BridgeVLA/tree/bridgevla) of this repo; this `main` branch hosts BridgeVLA++.
+
 ## 🔥 News
 
 * **`2026.08.05`** 🌟 BridgeVLA++ is released: training & evaluation code for **five simulation benchmarks** (RLBench, COLOSSEUM, GemBench, memoryBench, RMBench) and **real robot embodiments**, with checkpoints on HuggingFace / ModelScope.
