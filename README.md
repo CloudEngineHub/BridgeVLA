@@ -8,7 +8,7 @@ A 3D VLA framework that aligns inputs and outputs in a shared 2D heatmap space, 
 
 </div>
 
-> 🔀 **Looking for the original BridgeVLA (NeurIPS 2025)?** Its code and README are preserved unchanged on the [`bridgevla` branch](https://github.com/BridgeVLA/BridgeVLA/tree/bridgevla) of this repo; this `main` branch hosts BridgeVLA++, its journal extension.
+> 🔀 **Looking for the original BridgeVLA (NeurIPS 2025)?** Its code and README are preserved unchanged on the [`bridgevla` branch](https://github.com/BridgeVLA/BridgeVLA/tree/bridgevla) of this repo; this `main` branch hosts BridgeVLA++.
 
 ## 🔥 News
 
@@ -75,20 +75,19 @@ Note: RLBench/PyRep sources are not redistributed (their license forbids it) —
 
 ### Checkpoints & pre-training corpus
 
-```bash
-# From HuggingFace (LPY/BridgeVLA):
-bash scripts/download_checkpoints_hf.sh --list                     # show all targets + sizes
-bash scripts/download_checkpoints_hf.sh rlbench paligemma clip     # evaluate the released RLBench checkpoint  (~19 GiB)
-bash scripts/download_checkpoints_hf.sh pretrain paligemma clip    # warm start for training it yourself       (~18 GiB)
-bash scripts/download_checkpoints_hf.sh pretrain_data paligemma    # re-run grounding pre-training             (~29 GiB)
+`scripts/download_checkpoints_hf.sh` pulls the released artifacts from HuggingFace (`LPY/BridgeVLA`); `scripts/download_checkpoints_ms.sh` is a drop-in ModelScope mirror (`susetiankong/bridgevla_plus`) — **identical targets and options**, just a different hub. The examples below use the HF script.
 
-# From the ModelScope mirror (identical content) — same targets, just the _ms script:
-bash scripts/download_checkpoints_ms.sh rlbench paligemma clip
+```bash
+bash scripts/download_checkpoints_hf.sh --list                     # list every target + size
+bash scripts/download_checkpoints_hf.sh rlbench paligemma clip     # evaluate the released RLBench checkpoint  (~19 GiB)
+bash scripts/download_checkpoints_hf.sh pretrain paligemma clip    # warm start to train it yourself           (~18 GiB)
+bash scripts/download_checkpoints_hf.sh pretrain_data paligemma    # re-run grounding pre-training             (~29 GiB)
 ```
 
-* Swap `rlbench` for `colosseum` / `gembench` / `memorybench` / `rmbench:<task>`. Download only what you need — `all` is ~120 GiB.
+* Each benchmark's checkpoint is just its target name — swap `rlbench` for `colosseum` / `gembench` / `memorybench` / `rmbench` (or `rmbench:<task>` for a single task). Download only what you need — `all` is ~120 GiB.
+* Run the exact same arguments with `scripts/download_checkpoints_ms.sh` to pull from ModelScope instead (its `paligemma` mirror is ungated — no login needed).
 * Downloads resume, and files land exactly where the train/eval scripts look.
-* `paligemma` is gated on [HuggingFace](https://huggingface.co/google/paligemma-3b-pt-224) (accept the license on its model page and `hf auth login` first); the `_ms` variant uses an ungated mirror — no login needed.
+* `paligemma` is gated on [HuggingFace](https://huggingface.co/google/paligemma-3b-pt-224) (accept the license on its model page and `hf auth login` first).
 
 ### Benchmark datasets (third-party)
 
@@ -199,7 +198,7 @@ This repository is released under **Apache-2.0** (see `LICENSE`); vendored third
   author  = {},
   journal = {},
   year    = {2026},
-  note    = {arXiv coming soon; extension of the NeurIPS 2025 paper BridgeVLA}
+  note    = {arXiv coming soon}
 }
 
 @misc{li2025bridgevla,
