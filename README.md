@@ -4,7 +4,7 @@
 
 A 3D VLA framework that aligns inputs and outputs in a shared 2D heatmap space, augmented with a unified spatio-temporal memory that decides *what to do next* and *where exactly to act* — extending to bimanual manipulation and new robot embodiments.
 
-\[📄Paper (coming soon)\]  [\[🏠Project Page\]](https://bridgevla-plus.github.io/)  [\[🤗Checkpoints\]](https://huggingface.co/datasets/LPY/BridgeVLA)  [\[🪄ModelScope\]](https://modelscope.cn/models/susetiankong/bridgevla_plus)
+[\[📄Paper\]](https://arxiv.org/abs/2608.05042)  [\[🏠Project Page\]](https://bridgevla-plus.github.io/)  [\[🤗Checkpoints\]](https://huggingface.co/datasets/LPY/BridgeVLA)  [\[🪄ModelScope\]](https://modelscope.cn/models/susetiankong/bridgevla_plus)
 
 </div>
 
@@ -191,13 +191,18 @@ This repository is released under **Apache-2.0** (see `LICENSE`); vendored third
 ## 📝 Citation
 
 ```bibtex
-@article{bridgevlaplus2026,
-  title   = {BridgeVLA++: A Data-Efficient, Generalizable, and Memory-Augmented
-             Vision-Language-Action Framework for 3D Manipulation},
-  author  = {},
-  journal = {},
-  year    = {2026},
-  note    = {}
+@misc{li2026bridgevlaplus,
+  title         = {BridgeVLA++: A Data-Efficient, Generalizable, and Memory-Augmented
+                   Vision-Language-Action Framework for 3D Manipulation},
+  author        = {Peiyan Li and Yuze Zhu and Yixiang Chen and Qisen Ma and Yuan Xu
+                   and Jiabing Yang and He Guan and Yan Huang and Hongtao Wu and Xiao Ma
+                   and Tao Kong and Liang Wang and Tieniu Tan},
+  year          = {2026},
+  eprint        = {2608.05042},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.RO},
+  url           = {https://arxiv.org/abs/2608.05042},
+  note          = {Extension of the NeurIPS 2025 conference paper BridgeVLA}
 }
 
 @misc{li2025bridgevla,
