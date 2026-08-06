@@ -201,8 +201,7 @@ This repository is released under **Apache-2.0** (see `LICENSE`); vendored third
   eprint        = {2608.05042},
   archivePrefix = {arXiv},
   primaryClass  = {cs.RO},
-  url           = {https://arxiv.org/abs/2608.05042},
-  note          = {Extension of the NeurIPS 2025 conference paper BridgeVLA}
+  url           = {https://arxiv.org/abs/2608.05042}
 }
 
 @misc{li2025bridgevla,
