@@ -6,6 +6,12 @@ A 3D VLA framework that aligns inputs and outputs in a shared 2D heatmap space, 
 
 [\[📄Paper\]](https://arxiv.org/abs/2608.05042)  [\[🏠Project Page\]](https://bridgevla-plus.github.io/)  [\[🤗Checkpoints\]](https://huggingface.co/datasets/LPY/BridgeVLA)  [\[🪄ModelScope\]](https://modelscope.cn/models/susetiankong/bridgevla_plus)
 
+[![Papers with Code: SOTA on RLBench](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge.svg?eval=20449&live=1)](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge-link?eval=20449)
+[![Papers with Code: SOTA on COLOSSEUM](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge.svg?eval=20450&live=1)](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge-link?eval=20450)
+[![Papers with Code: SOTA on GemBench](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge.svg?eval=20451&live=1)](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge-link?eval=20451)
+[![Papers with Code: SOTA on MemoryBench](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge.svg?eval=20452&live=1)](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge-link?eval=20452)
+[![Papers with Code: SOTA on RMBench](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge.svg?eval=20453&live=1)](https://paperswithcode.co/api/v1/papers/2608.05042/leaderboard-badge-link?eval=20453)
+
 </div>
 
 > 🔀 **Looking for the original BridgeVLA (NeurIPS 2025)?** Its code and README live on the [`bridgevla` branch](https://github.com/BridgeVLA/BridgeVLA/tree/bridgevla) of this repo; this `main` branch hosts BridgeVLA++.
