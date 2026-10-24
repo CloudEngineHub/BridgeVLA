@@ -1,11 +1,13 @@
+# Recipe of the released RLBench checkpoint (model_1215). This file covers epochs 0-799; the run was then
+# resumed to epoch 1400 with a longer LR decay (see the usage notes in train.sh).
 exp_id: debug
 tasks: all    # comma-separated task names, or "all" for RLBENCH_TASKS (18 tasks)
 bs: 4
 num_workers: 3
-epochs: 180
+epochs: 800
 save_every_n_epochs: 5   # >0: save every N epochs (skip epoch 0) + final epoch; 0: disable saving
-# false (default) -> weights only (smaller files), resume restarts the optimizer at global_step=0;
-# true -> also store optimizer state + global_step + freeze_epochs for an exact resume.
+# false (default) -> weights only (smaller files), resume restarts the optimizer (the LR warmup step is kept);
+# true -> also store optimizer state for an exact resume.
 save_optimizer_state: false
 
 # --- Multi-task sampling balance ---
@@ -18,7 +20,12 @@ task_sampling:
 # --- Two-stage training: Stage 1 (epoch < freeze_epochs) freezes PaliGemma and trains heads + feat_fc +
 # memory blocks; Stage 2 unfreezes the backbone. ---
 freeze_epochs: 4
-warmup_steps:  1500    # linear warmup per stage, no LR decay
+warmup_steps:  1500    # linear warmup per stage
+# Half-cosine LR decay to min_lr_ratio x lr over the last last_n_epochs epochs (constant LR before).
+lr_decay:
+  enabled: true
+  last_n_epochs: 300
+  min_lr_ratio: 0.0125
 
 # --- Per-epoch heatmap visualization (mirrors GemBench) ---
 # Samples ONE episode per task from the training keyframe dataset and dumps, for every step, the pred+GT
@@ -38,15 +45,33 @@ log_dir: "data/bridgevla_data/logs"  # fallback; train.sh overrides it with --lo
 # forwards add extra graphs). Propagated onto mvt_cfg before MVT() is built. ---
 gradient_checkpointing: true
 
+# Tri-view "right" camera at the original BridgeVLA / RVT-2 position (propagated onto mvt_cfg).
+rend_right_cam_eye_y: 0.5
+
 # --- Rotation head: 6D continuous regression (Zhou et al., CVPR 2019), mirroring RMBench / real ---
 # "6d" -> train.py sets rot_ver=2 and feat_dim=10; the rotation is regressed as a 6D vector ->
 # Gram-Schmidt -> SO(3), supervised by a Frobenius loss to the GT matrix. "euler_disc" restores the discrete head.
 rotation_representation: "6d"
+rot_loss_weight: 3.0
 
-# --- Rotation/grip/collision feature source: STAGE 1 (coarse), mirroring RMBench / real ---
-# true -> those heads read stage-1 features and stage 2 emits only the translation heatmap; translation
-# precision is unchanged. false -> the original stage-2 source.
-feat_from_stage1: true
+# --- Rotation symmetry (6D head only): objects that look the same after a twist about the gripper's
+# approach axis make the rotation label ambiguous, so matching samples are supervised against one
+# canonical equivalent (bridgevla/utils/rot_symmetry.py). k = symmetry order ("inf" = round object);
+# steps = transition indices (dataset step_idx), variations = RLBench variation indices; first match wins.
+rot_symmetry:
+  enabled: true
+  rules:
+    - {task: insert_onto_square_peg, k: 4, steps: [0, 1, 2]}        # grasping the square ring
+    - {task: insert_onto_square_peg, k: 2, steps: [3, 4]}           # ring over / onto the peg
+    - {task: light_bulb_in, k: 2}                                   # round bulb, demos 180 deg apart
+    - {task: place_shape_in_shape_sorter, k: 4, variations: [0]}    # cube
+    - {task: place_shape_in_shape_sorter, k: inf, variations: [1]}  # cylinder
+    - {task: stack_blocks, k: 4}                                    # cubes
+
+# --- Rotation/grip/collision feature source ---
+# false -> the original stage-2 (zoomed) features. true -> stage-1 features (RMBench / real), with stage 2
+# emitting only the translation heatmap.
+feat_from_stage1: false
 
 # --- Episodic memory (spatial anchor + temporal episodic), mirroring RMBench / MemoryBench / real ---
 # Spatial Anchor (stage1+stage2) cross-attends current PaliGemma tokens against the episode's frame-0

@@ -76,6 +76,11 @@ _C.peract.transform_augmentation_rpy = [0.0, 0.0, 20.0]
 # Two-stage training
 _C.freeze_epochs = 5       # Stage 1: freeze backbones for this many epochs
 _C.warmup_steps = 2000     # Linear warmup steps per stage
+# Half-cosine LR decay from 1x to ``min_lr_ratio`` over the last ``last_n_epochs`` epochs (RLBench/train.py).
+_C.lr_decay = CN()
+_C.lr_decay.enabled = False
+_C.lr_decay.last_n_epochs = 30
+_C.lr_decay.min_lr_ratio = 0.1
 
 # Per-task-episode heatmap visualization cadence (GemBench / RLBench / real). Every N epochs rank 0 picks
 # one random episode per task, runs eval mode over its steps, and dumps pred/GT overlays under
@@ -114,6 +119,8 @@ _C.gradient_checkpointing = True
 _C.rotate_top_ccw90 = False
 # Mirror of ``mvt_cfg.renderer_img_sizes_w`` (smaller = tighter mvt1/mvt2 FOV).
 _C.renderer_img_sizes_w = 2.0
+# Mirror of ``mvt_cfg.rend_right_cam_eye_y`` (tri-view "right" camera position; RLBench uses 0.5).
+_C.rend_right_cam_eye_y = 1.0
 # Mirror of ``mvt_cfg.splat_radius`` / ``splat_radius_mvt2`` (mvt1 / mvt2).
 _C.splat_radius = 0.012
 _C.splat_radius_mvt2 = 0.012
@@ -141,6 +148,11 @@ _C.predict_collision = True
 # "6d": continuous 6D rotation regression (Zhou et al., CVPR 2019). train.py maps it to mvt_cfg.rot_ver = 2
 #     and shrinks feat_dim to 6 + grip(2) + collision(2) = 10, fully bypassing discretization / gimble_fix.
 _C.rotation_representation = "euler_disc"
+_C.rot_loss_weight = 1.0
+# Twist-symmetry rules for the 6D rotation loss (RLBench/train.py); see bridgevla/utils/rot_symmetry.py.
+_C.rot_symmetry = CN()
+_C.rot_symmetry.enabled = False
+_C.rot_symmetry.rules = []
 
 # Mirror of ``mvt_cfg.feat_from_stage1``. False (default): rot/grip/collision features come from stage 2
 # (fine zoom). True (RMBench): from stage 1 (global max-pool + waypoint local patch).

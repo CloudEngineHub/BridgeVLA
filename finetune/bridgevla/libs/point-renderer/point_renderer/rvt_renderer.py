@@ -35,6 +35,7 @@ class RVTBoxRenderer():
         flip_top_up=False,
         rotate_top_ccw90=False,
         img_sizes_w=None,
+        right_cam_eye_y=1.0,
         **kwargs):
 
         self.renderer = PointRenderer(device=device, perf_timer=perf_timer)
@@ -76,6 +77,7 @@ class RVTBoxRenderer():
             add_3p=add_3p,
             flip_top_up=flip_top_up,
             rotate_top_ccw90=rotate_top_ccw90,
+            right_cam_eye_y=right_cam_eye_y,
         )
         self.cameras = self.cameras.to(device)
 
@@ -109,6 +111,7 @@ class RVTBoxRenderer():
         flip_top_up=False,
         rotate_top_ccw90=False,
         img_sizes_w=None,
+        right_cam_eye_y=1.0,
     ):
         top_up = [0, -1, 0] if flip_top_up else [0, 1, 0]
         if rotate_top_ccw90:
@@ -126,14 +129,13 @@ class RVTBoxRenderer():
             "down": {"eye": [0, 0, -1], "at": [0, 0, 0], "up": [0, 1, 0]},
             "back": {"eye": [-1, 0, 0], "at": [0, 0, 0], "up": [0, 0, 1]},
             "left": {"eye": [0, -1, 0], "at": [0, 0, 0], "up": [0, 0, 1]},
-            # eye=[0, 1, 0] (NOT [0, 0.5, 0]): the camera must sit on the y=+1
-            # face of the cube, symmetric with "left" at y=-1. The original
-            # initial-commit value [0, 0.5, 0] put the camera INSIDE the [-1,1]^3
-            # cube, so points with cube-space y > 0.5 had negative depth in the
-            # camera frame and were drawn on top of legitimate front points
-            # (z-buffer pollution). Visible as tilted/floating streaks in the
-            # right-view dumps for any scene with non-trivial spread along y.
-            "right": {"eye": [0, 1, 0], "at": [0, 0, 0], "up": [0, 0, 1]},
+            # right_cam_eye_y = 1.0 puts the camera on the y=+1 face of the cube,
+            # symmetric with "left". 0.5 is the original BridgeVLA / RVT-2
+            # placement: the camera sits inside the [-1,1]^3 cube, so points with
+            # y > 0.5 get negative depth and are drawn on top in the right view.
+            # The released RLBench checkpoint was trained with 0.5, so it must be
+            # rendered with 0.5 (mvt_cfg.rend_right_cam_eye_y).
+            "right": {"eye": [0, right_cam_eye_y, 0], "at": [0, 0, 0], "up": [0, 0, 1]},
             "oblique_a": {"eye": [ _a,          0.0,         _b],
                           "at":  [0, 0, 0],
                           "up":  [-_b,          0.0,         _a]},

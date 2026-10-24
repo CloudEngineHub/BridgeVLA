@@ -19,8 +19,9 @@ This trainer was rewritten to match the CURRENT BridgeVLA++ model logic
     ``agent.update_gembench`` builds memory_inputs automatically. RLBench has
     no subtask-boundary label, so mem_label is always 0 and the keyframe
     discriminator is trained to a constant negative ("never admit").
-  * Rotation head: 6D continuous regression (rot_ver=2) + feat_from_stage1,
-    selectable from the yaml (rotation_representation / feat_from_stage1).
+  * Rotation head (6D continuous regression, rot_ver=2, or discrete Euler) and
+    the rot/grip/collision feature source, selectable from the yaml
+    (rotation_representation / feat_from_stage1).
 
 Eval (eval.py) is unchanged: it loads mvt_cfg.yaml (which now records the
 memory + rotation settings), and the shared ``RVTAgent.act`` + YARR rollout
@@ -30,6 +31,7 @@ start). The post-inference action handoff to the RLBench simulator is unchanged.
 Adapted from memoryBench/train.py.
 '''
 import argparse
+import math
 import os
 import subprocess
 import sys
@@ -55,6 +57,7 @@ import bridgevla.mvt.config as mvt_cfg_mod
 from bridgevla.models.bridgevla_agent import print_loss_log
 from bridgevla.mvt.memory import memory_param_norms
 from bridgevla.mvt.mvt import MVT
+from bridgevla.utils.rot_symmetry import RotSymmetryTable
 from bridgevla.utils.rvt_utils import get_num_feat, RLBENCH_TASKS
 
 from utils.peract_utils_rlbench import (
@@ -166,7 +169,25 @@ def create_dataloader(dataset, rank, world_size, batch_size, num_workers, sample
     return loader, sampler
 
 
-def train(agent, data_loader, epoch, cameras, rank=0):
+def make_lr_decay_fn(exp_cfg, end_epoch):
+    """exp_cfg.lr_decay -> f(fractional epoch) giving the LR multiplier, or None when
+    disabled: 1 until the last ``last_n_epochs`` epochs, then a half-cosine down to
+    ``min_lr_ratio`` at ``end_epoch``."""
+    if not exp_cfg.lr_decay.enabled:
+        return None
+    n = int(exp_cfg.lr_decay.last_n_epochs)
+    lo = float(exp_cfg.lr_decay.min_lr_ratio)
+    if not (0 < n <= end_epoch and 0.0 <= lo <= 1.0):
+        raise ValueError(f"bad lr_decay: last_n_epochs={n} (epochs={end_epoch}), min_lr_ratio={lo}")
+    start = end_epoch - n
+
+    def fn(epoch):
+        p = min(max((epoch - start) / n, 0.0), 1.0)
+        return lo + (1.0 - lo) * 0.5 * (1.0 + math.cos(math.pi * p))
+    return fn
+
+
+def train(agent, data_loader, epoch, cameras, rank=0, lr_decay_fn=None):
     """One epoch over the RLBench keyframe dataloader (action-only)."""
     agent.train()
 
@@ -186,6 +207,8 @@ def train(agent, data_loader, epoch, cameras, rank=0):
 
     epoch_losses = {}
     for it, raw_batch in enumerate(data_loader):
+        if lr_decay_fn is not None:
+            agent._lr_decay_scale = lr_decay_fn(epoch + it / n_iters)
         batch = to_device(raw_batch, agent._device)
         batch["tasks"] = raw_batch["tasks"]
         # mvt_single's text indexing expects [[[str]]].
@@ -222,8 +245,8 @@ def train(agent, data_loader, epoch, cameras, rank=0):
 
 def save_agent(agent, path, epoch, freeze_epochs=None, save_optimizer_state=False):
     """Checkpoint the agent. ``epoch`` / ``model_state`` stay byte-compatible
-    with eval-time loaders; optimizer_state / global_step / freeze_epochs are
-    only written when save_optimizer_state=True (exact-resume support).
+    with eval-time loaders; global_step / freeze_epochs are always written,
+    optimizer_state only when save_optimizer_state=True (exact-resume support).
     """
     model = agent._network
     model_state = model.module.state_dict() if isinstance(model, DDP) else model.state_dict()
@@ -240,7 +263,8 @@ def save_agent(agent, path, epoch, freeze_epochs=None, save_optimizer_state=Fals
 
 def restore_checkpoint(agent, ckpt, local_rank, rank, freeze_epochs):
     """Restore model + optimizer + LR-warmup step from a training checkpoint.
-    Mirrors memoryBench/train.py (see there for the full rationale).
+    Mirrors memoryBench/train.py (see there for the full rationale), except that
+    the LR-warmup step is kept even when no optimizer state was saved.
     """
     model = agent._network.module if isinstance(agent._network, DDP) else agent._network
     missing, unexpected = model.load_state_dict(ckpt["model_state"], strict=False)
@@ -262,25 +286,28 @@ def restore_checkpoint(agent, ckpt, local_rank, rank, freeze_epochs):
             print(f"[resume] start_epoch ({start_epoch}) == freeze_epochs; the "
                   f"Stage-2 optimizer is rebuilt fresh by the loop. Skipping "
                   f"optimizer-state load; global_step stays 0.")
-    elif opt_state is not None:
-        try:
-            agent._optimizer.load_state_dict(opt_state)
-            for state in agent._optimizer.state.values():
-                for k, v in state.items():
-                    if isinstance(v, torch.Tensor):
-                        state[k] = v.to(local_rank)
-            agent._global_step = int(ckpt.get("global_step", 0))
-            if rank == 0:
-                print(f"[resume] optimizer state restored; global_step="
-                      f"{agent._global_step} (LR warmup continues).")
-        except (ValueError, KeyError) as e:
-            if rank == 0:
-                print(f"[resume] WARNING: optimizer state load failed ({e}); "
-                      f"continuing with a freshly-built optimizer, global_step=0.")
     else:
+        # The LR warmup continues from the saved step count, with or without
+        # optimizer state, so a resume never re-runs the warmup.
+        agent._global_step = int(ckpt.get("global_step", 0))
+        if opt_state is not None:
+            try:
+                agent._optimizer.load_state_dict(opt_state)
+                for state in agent._optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.to(local_rank)
+                if rank == 0:
+                    print("[resume] optimizer state restored.")
+            except (ValueError, KeyError) as e:
+                if rank == 0:
+                    print(f"[resume] WARNING: optimizer state load failed ({e}); "
+                          f"continuing with a freshly-built optimizer.")
+        elif rank == 0:
+            print("[resume] no optimizer_state in checkpoint; continuing with a "
+                  "freshly-built optimizer.")
         if rank == 0:
-            print("[resume] no optimizer_state in checkpoint (old format); "
-                  "continuing with a freshly-built optimizer, global_step=0.")
+            print(f"[resume] global_step={agent._global_step} (LR warmup continues).")
 
     if rank == 0:
         print(f"[resume] resuming from epoch {saved_epoch} -> start_epoch {start_epoch}.")
@@ -555,6 +582,11 @@ def experiment(cmd_args):
         raise ValueError(
             f"Unknown rotation_representation={_rot_repr!r} (expected 'euler_disc' or '6d')"
         )
+    rot_symmetry = None
+    if exp_cfg.rot_symmetry.enabled:
+        if _rot_repr != "6d":
+            raise ValueError("rot_symmetry needs rotation_representation='6d'")
+        rot_symmetry = RotSymmetryTable(exp_cfg.rot_symmetry.rules)
 
     # Propagate exp_cfg-level toggles the network consumes onto mvt_cfg before
     # MVT() is built (yacs scopes are independent). Mirrors memoryBench/real.
@@ -565,6 +597,8 @@ def experiment(cmd_args):
         mvt_cfg.feat_from_stage1 = bool(exp_cfg.feat_from_stage1)
     if hasattr(exp_cfg, "img_aug_2") and hasattr(mvt_cfg, "img_aug_2"):
         mvt_cfg.img_aug_2 = float(exp_cfg.img_aug_2)
+    if hasattr(exp_cfg, "rend_right_cam_eye_y") and hasattr(mvt_cfg, "rend_right_cam_eye_y"):
+        mvt_cfg.rend_right_cam_eye_y = float(exp_cfg.rend_right_cam_eye_y)
     # Unified-yaml memory propagation (select + discriminator included so the
     # dataset layout and the eval MemoryBank stay aligned, and the dumped
     # mvt_cfg.yaml self-documents the memory policy for eval-time load_agent).
@@ -602,6 +636,8 @@ def experiment(cmd_args):
         cameras=CAMERAS,
         log_dir=f"{log_dir}/test_run/",
         warmup_steps=int(getattr(exp_cfg, "warmup_steps", 2000)),
+        rot_loss_weight=exp_cfg.rot_loss_weight,
+        rot_symmetry=rot_symmetry,
         **exp_cfg.peract,
         **exp_cfg.rvt,
     )
@@ -660,6 +696,10 @@ def experiment(cmd_args):
             freeze_epochs=FREEZE_EPOCHS,
         )
         del resume_ckpt
+        if start_epoch >= end_epoch:
+            raise ValueError(
+                f"[resume] checkpoint epoch {start_epoch - 1} is already at/after the "
+                f"run's end (epochs={end_epoch}); nothing to train. Raise epochs.")
 
     if dist.get_rank() == 0:
         temp1 = exp_cfg.peract.lr
@@ -764,6 +804,7 @@ def experiment(cmd_args):
             print(f"[RLBench] visualize_epoch failed at epoch {epoch_idx}: {e}", flush=True)
             traceback.print_exc()
 
+    lr_decay_fn = make_lr_decay_fn(exp_cfg, end_epoch)
     i = start_epoch
     while True:
         if i == end_epoch:
@@ -789,7 +830,7 @@ def experiment(cmd_args):
         print(f"Rank [{dist.get_rank()}], Epoch [{i}]: Training")
         train_dataloader.sampler.set_epoch(i)
         train(agent, train_dataloader, epoch=i, cameras=cmd_args.cameras,
-              rank=dist.get_rank())
+              rank=dist.get_rank(), lr_decay_fn=lr_decay_fn)
 
         save_every = int(getattr(exp_cfg, "save_every_n_epochs", 10))
         is_periodic = save_every > 0 and i > 0 and (i % save_every == 0)

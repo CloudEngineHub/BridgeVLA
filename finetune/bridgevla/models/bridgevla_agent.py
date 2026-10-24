@@ -36,6 +36,7 @@ from bridgevla.mvt.heads_focal import (
 )
 from bridgevla.mvt.view_logvar import assert_view_logvar_disabled
 from bridgevla.mvt.memory import MemoryBank, stack_hist_tokens_from_bank
+from bridgevla.utils.rot_symmetry import symmetric_rotation_loss
 from bridgevla.utils.viz_utils import (
     _save_anchor_frames,
     _save_memory_panel,
@@ -376,8 +377,13 @@ class RVTAgent:
         log_dir="",
         align_real_frame: bool = False,
         use_view_logvar: bool = False,
+        rot_loss_weight: float = 1.0,
+        rot_symmetry=None,
     ):
         self._network = network
+        self.rot_loss_weight = float(rot_loss_weight)
+        # RotSymmetryTable (bridgevla/utils/rot_symmetry.py) for the 6D rotation loss, or None.
+        self.rot_symmetry = rot_symmetry
         self._num_rotation_classes = num_rotation_classes
         self._rotation_resolution = 360 / self._num_rotation_classes
         self._lr = lr
@@ -396,6 +402,8 @@ class RVTAgent:
         self._weight_decay = weight_decay
         self._betas = tuple(betas)
         self._warmup_steps = warmup_steps
+        # LR multiplier on top of the warmup, set every step by the trainer (exp_cfg.lr_decay).
+        self._lr_decay_scale = 1.0
         self.gt_hm_sigma = gt_hm_sigma
         self.img_aug = img_aug
         self.add_rgc_loss = add_rgc_loss
@@ -1117,7 +1125,13 @@ class RVTAgent:
                     # 6D regression: Frobenius² to GT rotation matrix.
                     R_pred = aug_utils.rotation_6d_to_matrix(rot_q)
                     R_gt = self._gt_rotmat_from_quat(action_rot, rot_q.device)
-                    rot_loss_6d = ((R_pred - R_gt) ** 2).sum(dim=(-1, -2)).mean()
+                    if self.rot_symmetry is not None:
+                        orders = self.rot_symmetry.orders_for_batch(
+                            replay_sample["tasks"], replay_sample["step_idx"],
+                            replay_sample["variation"])
+                        rot_loss_6d = symmetric_rotation_loss(R_pred, R_gt, orders).mean()
+                    else:
+                        rot_loss_6d = ((R_pred - R_gt) ** 2).sum(dim=(-1, -2)).mean()
                 else:
                     rot_loss_x = self._cross_entropy_loss(
                         rot_q[:, 0 * self._num_rotation_classes : 1 * self._num_rotation_classes],
@@ -1140,9 +1154,10 @@ class RVTAgent:
                         collision_q, action_collision_one_hot.argmax(-1),
                     ).mean()
 
+            w_rot = self.rot_loss_weight
             total_loss = (
-                trans_loss + rot_loss_x + rot_loss_y + rot_loss_z + rot_loss_6d
-                + grip_loss + collision_loss
+                trans_loss + w_rot * rot_loss_x + w_rot * rot_loss_y + w_rot * rot_loss_z
+                + w_rot * rot_loss_6d + grip_loss + collision_loss
             )
 
             # ---- Keyframe discriminator BCE (mirrors _update_shared_dual) ----
@@ -1176,7 +1191,7 @@ class RVTAgent:
             self._optimizer.zero_grad(set_to_none=True)
             total_loss.backward()
             self._global_step += 1
-            lr_scale = self._get_warmup_lr_scale()
+            lr_scale = self._get_warmup_lr_scale() * self._lr_decay_scale
             for pg in self._optimizer.param_groups:
                 pg["lr"] = self._lr * lr_scale
             self._optimizer.step()

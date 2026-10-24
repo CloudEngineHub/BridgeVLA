@@ -59,6 +59,9 @@ _C.flip_top_up = False
 _C.rotate_top_ccw90 = False
 # Orthographic renderer world extent [W, H] in cube coords (2.0 covers [-1,1]^3); smaller zooms mvt1/mvt2 in.
 _C.renderer_img_sizes_w = 2.0
+# y position of the tri-view "right" camera (cube coords). 1.0 = on the cube face; 0.5 = the original
+# BridgeVLA / RVT-2 placement, used by the released RLBench checkpoint. Must match the checkpoint.
+_C.rend_right_cam_eye_y = 1.0
 
 # Point-cloud splat radius (WORLD units) for the mvt1 tri-view renderer; splat_radius_mvt2 defaults to 0.012
 # so stage 2 can stay coarser when mvt1 is tuned finer. Pixel kernel = ceil(focal_px * radius).

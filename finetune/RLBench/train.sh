@@ -15,6 +15,11 @@
 #   Disabling a memory automatically appends an ablation suffix to swanlab_run / the run directory
 #   (_no_temporal_mem / _no_spatial_mem / _no_mem).
 #   All other arguments are passed through to train.py verbatim (e.g. --epochs 200).
+#
+# Released RLBench checkpoint (model_1215), configs/rlbench_config.yaml:
+#   bash train.sh --no-pretrain                                        # epochs 0-799
+#   bash train.sh --resume_path <run_dir>/model_799.pth \
+#       --exp_cfg_opts "epochs 1401 lr_decay.last_n_epochs 501"        # epochs 800-1400
 
 # Paths and environment: all derived from the repository root, no machine-specific config;
 FINETUNE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # <repo>/finetune
@@ -194,7 +199,7 @@ if [[ "$USE_PRETRAIN" == "true" ]]; then
     if [ ! -e "${PRETRAIN_PATH}" ]; then
         echo "[train.sh] ERROR: pretrain weights not found: ${PRETRAIN_PATH}" >&2
         echo "[train.sh]   put the BridgeVLA pre-training weights in place, or export PRETRAIN_PATH=<your own pretrain>," >&2
-        echo "[train.sh]   or add --no-pretrain to cold start (expect a noticeable accuracy drop)." >&2
+        echo "[train.sh]   or add --no-pretrain to cold start (the released RLBench checkpoint was trained that way)." >&2
         exit 1
     fi
     PRETRAIN_ARGS+=(--load_pretrain --pretrain_path "${PRETRAIN_PATH}")

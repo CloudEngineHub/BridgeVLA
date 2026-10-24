@@ -73,6 +73,7 @@ class MVT(nn.Module):
         flip_top_up=False,
         rotate_top_ccw90=False,
         renderer_img_sizes_w=2.0,
+        rend_right_cam_eye_y=1.0,
         splat_radius=0.012,
         splat_radius_mvt2=0.012,
         use_modified_focal_loss=False,
@@ -108,6 +109,7 @@ class MVT(nn.Module):
         del args["flip_top_up"]
         del args["rotate_top_ccw90"]
         del args["renderer_img_sizes_w"]
+        del args["rend_right_cam_eye_y"]
         del args["splat_radius"]
         del args["splat_radius_mvt2"]
         # feat_from_stage1 only affects the stage1/stage2 orchestration in
@@ -168,6 +170,7 @@ class MVT(nn.Module):
             flip_top_up=flip_top_up,
             rotate_top_ccw90=rotate_top_ccw90,
             img_sizes_w=_img_sizes_w,
+            right_cam_eye_y=rend_right_cam_eye_y,
         )
         self.renderer_mvt2 = BoxRenderer(
             device=renderer_device,
@@ -179,6 +182,7 @@ class MVT(nn.Module):
             flip_top_up=flip_top_up,
             rotate_top_ccw90=rotate_top_ccw90,
             img_sizes_w=_img_sizes_w,
+            right_cam_eye_y=rend_right_cam_eye_y,
         )
         self.num_img = self.renderer.num_img
         self.img_size = img_size

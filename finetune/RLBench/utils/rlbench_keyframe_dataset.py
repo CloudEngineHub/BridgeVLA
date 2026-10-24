@@ -16,7 +16,7 @@ This dataset instead emits ONE sample per keyframe→keyframe transition, exactl
 like GemBench / MemoryBench / RMBench: ``obs at keyframe k`` → ``action at
 keyframe k+1``. No arbitrary intermediate frames, no appended keyframe chain.
 
-EXCEPTION — ``AUG_TASKS`` (currently place_cups): these tasks deliberately go
+EXCEPTION — ``AUG_TASKS`` (currently none): these tasks deliberately go
 back to the ORIGINAL BridgeVLA fill_replay pairing on top of the canonical
 keyframes: every ``DEMO_AUGMENTATION_EVERY_N``-th raw frame starts a sample
 paired with its next keyframe, followed by the full remaining keyframe→keyframe
@@ -52,7 +52,6 @@ import hashlib
 import json
 import os
 import pickle
-import random
 import time
 from collections import Counter, OrderedDict
 from typing import List, Optional, Sequence
@@ -92,8 +91,28 @@ CACHE_VERSION = 2
 # these tasks changes. Cache impact: their .npz additionally stores the
 # non-keyframe start-frame observations; staleness is gated by the
 # ``aug_every_n`` meta key so other tasks' caches are untouched.
-AUG_TASKS = frozenset({"place_cups"})
+AUG_TASKS = frozenset()
 DEMO_AUGMENTATION_EVERY_N = 10  # matches original peract_utils DEMO_AUGMENTATION_EVERY_N
+
+# RLBench label error: in put_groceries_in_cupboard variation 4 (tuna) the can is as wide as the
+# open gripper, so the demos record gripper_open = 1 even while the can is held. Relabel the
+# grasp / lift / place keyframes as closed, only in episodes with the expected keyframe count whose
+# labels are all open. (task, variation) -> (num_keyframes, keyframe indices to close).
+GRIP_LABEL_FIX = {
+    ("put_groceries_in_cupboard", 4): (6, (2, 3, 4)),
+}
+
+
+def _fix_grip_labels(task: str, meta: dict, gripper_pose: np.ndarray) -> np.ndarray:
+    rule = GRIP_LABEL_FIX.get((task, int(meta["variation"])))
+    if rule is None:
+        return gripper_pose
+    num_kf, closed = rule
+    if gripper_pose.shape[0] != num_kf or not np.all(gripper_pose[:, 7] > 0.5):
+        return gripper_pose
+    gripper_pose = gripper_pose.copy()
+    gripper_pose[list(closed), 7] = 0.0
+    return gripper_pose
 
 
 def _augmented_entries(task: str, ep_idx: int, meta: dict) -> List[dict]:
@@ -767,7 +786,7 @@ class RLBench_Keyframe_Dataset(Dataset):
         out = {
             "rgb": npz["rgb"],
             "pcd": npz["pcd"],
-            "gripper_pose": npz["gripper_pose"],
+            "gripper_pose": _fix_grip_labels(task, meta, npz["gripper_pose"]),
             "ignore_collisions": npz["ignore_collisions"],
             "anchor_rgb": npz["anchor_rgb"],
             "anchor_pcd": npz["anchor_pcd"],
@@ -856,8 +875,12 @@ class RLBench_Keyframe_Dataset(Dataset):
         ).astype(np.float32)
         sample["ignore_collisions"] = float(ep["ignore_collisions"][step_idx + 1])
 
-        sample["lang_goal"] = random.choice(ep["meta"]["lang_goal"])
+        # First description only, aligned with BridgeVLA.
+        sample["lang_goal"] = ep["meta"]["lang_goal"][0]
         sample["tasks"] = task
+        # Keys of the rotation-symmetry rules (exp_cfg.rot_symmetry).
+        sample["step_idx"] = np.int64(step_idx)
+        sample["variation"] = np.int64(ep["meta"]["variation"])
 
         # ---- episodic memory bundle: anchor + K temporal slots ------------
         if self.memory_enabled:
@@ -877,7 +900,6 @@ class RLBench_Keyframe_Dataset(Dataset):
             # emitted as a plain step sample, never as aug_slot >= 0).
             last_exec = step_idx if aug_slot >= 0 else step_idx - 1
             sample["anchor_mask"] = np.array(aug_slot >= 0 or step_idx > 0, dtype=bool)
-            sample["step_idx"] = np.int64(step_idx)
 
             # RLBench has no subtask-boundary label -> always 0. The keyframe
             # discriminator is trained toward a constant negative, so its eval
