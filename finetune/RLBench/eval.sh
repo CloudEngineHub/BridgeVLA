@@ -16,7 +16,7 @@ BRIDGEVLA_ROOT="$(dirname "${FINETUNE_DIR}")"                      # <repo>
 export BRIDGEVLA_DATA_ROOT="${BRIDGEVLA_DATA_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_data}"
 export BRIDGEVLA_LOG_DIR="${BRIDGEVLA_LOG_DIR:-${BRIDGEVLA_DATA_ROOT}/logs}"
 export BRIDGEVLA_CKPT_ROOT="${BRIDGEVLA_CKPT_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_ckpt}"
-# Released checkpoint root: one subdirectory per bench, holding model_<E>.pth + exp_cfg.yaml +
+# Released checkpoint root: one subdirectory per bench, holding model_<bench>.pth + exp_cfg.yaml +
 # mvt_cfg.yaml (all three are needed to rebuild the right model). Your own training runs follow
 # the same convention, so just override MODEL_FOLDER=<run dir>.
 export BRIDGEVLA_RELEASE_CKPT_DIR="${BRIDGEVLA_RELEASE_CKPT_DIR:-${BRIDGEVLA_CKPT_ROOT}/bridgevla_plus}"
@@ -40,10 +40,10 @@ source "${CONDA_BASE}/bin/activate" "${RLBENCH_CONDA_ENV:-bridgevla_plus_rlbench
 MODEL_FOLDER="${MODEL_FOLDER:-${BRIDGEVLA_RELEASE_CKPT_DIR}/rlbench}"
 # Weight filename inside MODEL_FOLDER. To evaluate a specific epoch of your own run, use
 # `MODEL_FOLDER=/path/to/run MODEL_NAME=model_40.pth bash eval.sh`.
-MODEL_NAME="${MODEL_NAME:-model_130.pth}"
+MODEL_NAME="${MODEL_NAME:-model_rlbench.pth}"
 # A released directory usually holds a single weight: when MODEL_NAME does not match, the only
-# model_*.pth in the directory is picked automatically, so re-releasing a different epoch needs no
-# script change. With several candidates the value is kept and the sanity check below errors out.
+# model_*.pth in the directory is picked automatically. With several candidates the value is kept
+# and the sanity check below errors out.
 if [ ! -f "${MODEL_FOLDER}/${MODEL_NAME}" ]; then
     _CKPT_CANDS=( "${MODEL_FOLDER}"/model_*.pth )
     if [ "${#_CKPT_CANDS[@]}" -eq 1 ] && [ -f "${_CKPT_CANDS[0]}" ]; then
@@ -155,7 +155,7 @@ for _cfg in exp_cfg.yaml mvt_cfg.yaml; do
         echo "[Error] ${_cfg} missing in ${MODEL_FOLDER}"
         echo "        the weights must sit next to exp_cfg.yaml + mvt_cfg.yaml (they define the model structure)."
         echo "        your own run directories already have them; to keep a standalone copy, put all three files in one directory:"
-        echo "          model_<E>.pth  exp_cfg.yaml  mvt_cfg.yaml"
+        echo "          model_*.pth  exp_cfg.yaml  mvt_cfg.yaml"
         exit 1
     }
 done

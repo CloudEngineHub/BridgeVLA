@@ -85,7 +85,8 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=13003)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--base_path', type=str, default="/PATH_TO_MODEL_FOLDER")
-    parser.add_argument('--model_epoch', type=int, default=40)
+    parser.add_argument('--model_epoch', type=str, default="40",
+                        help='loads model_<model_epoch>.pth: an epoch of your own run, or the released name (gembench)')
     # Memory ablation switches (train/eval alignment): must match the loaded
     # model's mvt_cfg.yaml or MyActioner raises at startup. Set via
     # run_server.sh TEMPORAL_MEMORY / SPATIAL_MEMORY.

@@ -7,7 +7,7 @@ BRIDGEVLA_ROOT="$(dirname "${FINETUNE_DIR}")"                      # <repo>
 export BRIDGEVLA_DATA_ROOT="${BRIDGEVLA_DATA_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_data}"
 export BRIDGEVLA_LOG_DIR="${BRIDGEVLA_LOG_DIR:-${BRIDGEVLA_DATA_ROOT}/logs}"
 export BRIDGEVLA_CKPT_ROOT="${BRIDGEVLA_CKPT_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_ckpt}"
-# Released checkpoint root: one subdirectory per bench, holding model_<E>.pth + exp_cfg.yaml +
+# Released checkpoint root: one subdirectory per bench, holding model_<bench>.pth + exp_cfg.yaml +
 # mvt_cfg.yaml (all three are needed to rebuild the right model). Your own training runs follow the
 # same convention — just point the first positional argument at one.
 export BRIDGEVLA_RELEASE_CKPT_DIR="${BRIDGEVLA_RELEASE_CKPT_DIR:-${BRIDGEVLA_CKPT_ROOT}/bridgevla_plus}"
@@ -26,17 +26,15 @@ fi
 source "${CONDA_BASE}/bin/activate" "${GEMBENCH_CONDA_ENV:-bridgevla_plus_gembench}"
 
 MODEL_FOLDER="${1:-${BRIDGEVLA_RELEASE_CKPT_DIR}/memorybench}"
-MODEL_EPOCH="${2:-180}"
+# Weights file model_<MODEL_EPOCH>.pth: the released name by default, or an epoch of your own run.
+MODEL_EPOCH="${2:-memorybench}"
 # A released directory usually holds a single weight: when model_${MODEL_EPOCH}.pth does not match, the
-# only model_*.pth in the directory is used; it must resolve to the same epoch as run_server.sh (here it only names the result directory).
+# only model_*.pth in the directory is used; it must resolve to the same weights as run_server.sh (here it only names the result directory).
 if [ ! -f "${MODEL_FOLDER}/model_${MODEL_EPOCH}.pth" ]; then
     _CKPT_CANDS=( "${MODEL_FOLDER}"/model_*.pth )
     if [ "${#_CKPT_CANDS[@]}" -eq 1 ] && [ -f "${_CKPT_CANDS[0]}" ]; then
-        _CKPT_EPOCH="$(basename "${_CKPT_CANDS[0]}" .pth)"; _CKPT_EPOCH="${_CKPT_EPOCH#model_}"
-        if [[ "${_CKPT_EPOCH}" =~ ^[0-9]+$ ]]; then
-            MODEL_EPOCH="${_CKPT_EPOCH}"
-            echo "[Info] MODEL_EPOCH auto-resolved to ${MODEL_EPOCH} (the only weight in ${MODEL_FOLDER})"
-        fi
+        MODEL_EPOCH="$(basename "${_CKPT_CANDS[0]}" .pth)"; MODEL_EPOCH="${MODEL_EPOCH#model_}"
+        echo "[Info] MODEL_EPOCH auto-resolved to ${MODEL_EPOCH} (the only weight in ${MODEL_FOLDER})"
     fi
 fi
 # SEED does two things: (1) passed to client.py --seed, it seeds the RNGs

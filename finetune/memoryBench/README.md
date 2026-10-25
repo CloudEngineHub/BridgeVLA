@@ -229,7 +229,9 @@ Terminal A — host the agent:
 
 ```bash
 bash run_server.sh <model_epoch> <model_folder>
-# e.g. bash run_server.sh 320 data/bridgevla_ckpt/bridgevla_plus/memorybench
+# loads <model_folder>/model_<model_epoch>.pth, e.g.
+#   bash run_server.sh memorybench data/bridgevla_ckpt/bridgevla_plus/memorybench   # released weights (the default)
+#   bash run_server.sh 320 /path/to/your_run                                         # model_320.pth of your own run
 ```
 
 Terminal B — roll out for every taskvar in `assets/taskvars.json`:

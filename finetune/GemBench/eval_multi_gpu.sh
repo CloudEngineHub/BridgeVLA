@@ -26,18 +26,19 @@ BRIDGEVLA_ROOT="$(dirname "${FINETUNE_DIR}")"                      # <repo>
 export BRIDGEVLA_DATA_ROOT="${BRIDGEVLA_DATA_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_data}"
 export BRIDGEVLA_LOG_DIR="${BRIDGEVLA_LOG_DIR:-${BRIDGEVLA_DATA_ROOT}/logs}"
 export BRIDGEVLA_CKPT_ROOT="${BRIDGEVLA_CKPT_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_ckpt}"
-# Release checkpoint root (one subdirectory per bench, holding model_<E>.pth + the two cfg yamls).
+# Release checkpoint root (one subdirectory per bench, holding model_<bench>.pth + the two cfg yamls).
 export BRIDGEVLA_RELEASE_CKPT_DIR="${BRIDGEVLA_RELEASE_CKPT_DIR:-${BRIDGEVLA_CKPT_ROOT}/bridgevla_plus}"
 
 # ---- Checkpoints to evaluate — one per line: "<MODEL_FOLDER> <MODEL_EPOCH> [<SEED>]" ----
-#   MODEL_FOLDER : ckpt directory (model_<EPOCH>.pth / exp_cfg.yaml / mvt_cfg.yaml); a released ckpt
+#   MODEL_FOLDER : ckpt directory (model_<MODEL_EPOCH>.pth / exp_cfg.yaml / mvt_cfg.yaml); a released ckpt
 #                  directory and one of your own runs have identical layouts.
+#   MODEL_EPOCH  : an epoch of your own run, or gembench for the released weights (model_gembench.pth).
 #   SEED         : optional, defaults to DEFAULT_SEED. GemBench splits its test set into microsteps by seed.
 # The client runs all SPLITS x taskvars in one go and does not shard by taskvar, so parallelism is across
 # (model, seed) jobs — never list the same pair twice, or both write the same result.json. The paper
 # protocol is 4 seeds (200/400/500/600) over one ckpt.
 GEMBENCH_CKPT="${GEMBENCH_CKPT:-${BRIDGEVLA_RELEASE_CKPT_DIR}/gembench}"
-GEMBENCH_EPOCH="${GEMBENCH_EPOCH:-200}"
+GEMBENCH_EPOCH="${GEMBENCH_EPOCH:-gembench}"
 MODELS=(
     "${GEMBENCH_CKPT} ${GEMBENCH_EPOCH} 200"
     "${GEMBENCH_CKPT} ${GEMBENCH_EPOCH} 400"
@@ -116,7 +117,7 @@ for ((i = 0; i < NJOB; i++)); do
         [ -f "${folder}/${_cfg}" ] || {
             echo "[Error] ${_cfg} missing in ${folder}"
             echo "        weights must sit next to exp_cfg.yaml + mvt_cfg.yaml (they define the model structure);"
-            echo "        to assemble one yourself: copy model_<E>.pth + exp_cfg.yaml + mvt_cfg.yaml from a run into one directory."
+            echo "        to assemble one yourself: copy model_*.pth + exp_cfg.yaml + mvt_cfg.yaml from a run into one directory."
             exit 1
         }
     done

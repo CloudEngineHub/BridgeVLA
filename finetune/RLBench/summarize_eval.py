@@ -48,7 +48,8 @@ RLBENCH_TASKS = [
     "turn_tap",
 ]
 
-MODEL_DIR_RE = re.compile(r"^model_(\d+)(?:_(.*))?$")
+# model_<epoch>[_<suffix>] for your own runs, model_<name> for the released weights (model_rlbench).
+MODEL_DIR_RE = re.compile(r"^model_(?:(\d+)(?:_(.*))?|[A-Za-z][\w-]*)$")
 # The eval directory name = eval.sh's EVAL_LOG_NAME, a bare timestamp by default; a descriptive suffix
 # may follow (e.g. 20260730_143000_hold25) so several ablations of one ckpt are self-explanatory in the summary table.
 TIMESTAMP_DIR_RE = re.compile(r"^\d{8}_\d{6}(?:_[\w.+-]+)?$")
@@ -56,7 +57,7 @@ TIMESTAMP_DIR_RE = re.compile(r"^\d{8}_\d{6}(?:_[\w.+-]+)?$")
 
 def model_sort_key(path: Path) -> tuple[int, str]:
     match = MODEL_DIR_RE.fullmatch(path.name)
-    if match is None:
+    if match is None or match.group(1) is None:  # released names sort after the epochs
         return (sys.maxsize, path.name)
     return (int(match.group(1)), match.group(2) or "")
 

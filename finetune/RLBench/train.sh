@@ -16,7 +16,7 @@
 #   (_no_temporal_mem / _no_spatial_mem / _no_mem).
 #   All other arguments are passed through to train.py verbatim (e.g. --epochs 200).
 #
-# Released RLBench checkpoint (model_1215), configs/rlbench_config.yaml:
+# Released RLBench checkpoint (model_rlbench.pth, epoch 1215), configs/rlbench_config.yaml:
 #   bash train.sh --no-pretrain                                        # epochs 0-799
 #   bash train.sh --resume_path <run_dir>/model_799.pth \
 #       --exp_cfg_opts "epochs 1401 lr_decay.last_n_epochs 501"        # epochs 800-1400

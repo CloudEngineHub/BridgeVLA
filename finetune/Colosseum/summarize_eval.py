@@ -52,7 +52,8 @@ COLOSSEUM_TASKS = [
     "stack_cups",
 ]
 
-MODEL_DIR_RE = re.compile(r"^model_(\d+|last)(?:_(.*))?$")
+# model_<epoch|last>[_<suffix>] for your own runs, model_<name> for the released weights (model_colosseum).
+MODEL_DIR_RE = re.compile(r"^model_(?:(\d+|last)(?:_(.*))?|[A-Za-z][\w-]*)$")
 # eval.sh's EVAL_LOG_NAME defaults: YYYYmmdd_HHMMSS_var<N> (single variation) or
 # YYYYmmdd_HHMMSS_sweep<N>vars (a multi-variation sweep); a bare timestamp and arbitrary custom
 # suffixes are accepted too (the user may set EVAL_LOG_NAME to anything). Anything starting with an
@@ -63,7 +64,7 @@ TASK_VARIATION_RE = re.compile(r"^(?P<base>.+)_(?P<var>\d+)$")
 
 def model_sort_key(path: Path) -> tuple[int, str]:
     match = MODEL_DIR_RE.fullmatch(path.name)
-    if match is None:
+    if match is None or match.group(1) is None:  # released names sort after the epochs
         return (sys.maxsize, path.name)
     idx = match.group(1)
     return (sys.maxsize - 1 if idx == "last" else int(idx), match.group(2) or "")

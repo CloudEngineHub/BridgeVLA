@@ -1,5 +1,5 @@
-# Recipe of the released RLBench checkpoint (model_1215). This file covers epochs 0-799; the run was then
-# resumed to epoch 1400 with a longer LR decay (see the usage notes in train.sh).
+# Recipe of the released RLBench checkpoint (model_rlbench.pth, epoch 1215). This file covers epochs 0-799;
+# the run was then resumed to epoch 1400 with a longer LR decay (see the usage notes in train.sh).
 exp_id: debug
 tasks: all    # comma-separated task names, or "all" for RLBENCH_TASKS (18 tasks)
 bs: 4

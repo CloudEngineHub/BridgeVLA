@@ -7,7 +7,7 @@ BRIDGEVLA_ROOT="$(dirname "${FINETUNE_DIR}")"                      # <repo>
 export BRIDGEVLA_DATA_ROOT="${BRIDGEVLA_DATA_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_data}"
 export BRIDGEVLA_LOG_DIR="${BRIDGEVLA_LOG_DIR:-${BRIDGEVLA_DATA_ROOT}/logs}"
 export BRIDGEVLA_CKPT_ROOT="${BRIDGEVLA_CKPT_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_ckpt}"
-# Released checkpoint root: one subdirectory per bench, holding model_<E>.pth + exp_cfg.yaml +
+# Released checkpoint root: one subdirectory per bench, holding model_<bench>.pth + exp_cfg.yaml +
 # mvt_cfg.yaml (all three are needed to rebuild the right model). Your own training runs follow the
 # same convention — just point the second positional argument at one.
 export BRIDGEVLA_RELEASE_CKPT_DIR="${BRIDGEVLA_RELEASE_CKPT_DIR:-${BRIDGEVLA_CKPT_ROOT}/bridgevla_plus}"
@@ -25,21 +25,19 @@ if [ -z "${CONDA_BASE:-}" ]; then
 fi
 source "${CONDA_BASE}/bin/activate" "${GEMBENCH_CONDA_ENV:-bridgevla_plus_gembench}"
 
-MODEL_EPOCH="${1:-180}"
+# Weights file model_<MODEL_EPOCH>.pth: the released name by default, or an epoch of your own run.
+MODEL_EPOCH="${1:-memorybench}"
 # Loads the released ckpt by default; to evaluate your own run, pass its directory as the 2nd argument.
 # The weights are at ${MODEL_FOLDER}/model_${MODEL_EPOCH}.pth; eval results land in
 # ${MODEL_FOLDER}/eval/memorybench/model_${MODEL_EPOCH}/ (written by run_client.sh).
 MODEL_FOLDER="${2:-${BRIDGEVLA_RELEASE_CKPT_DIR}/memorybench}"
 # A released directory usually holds a single weight: when model_${MODEL_EPOCH}.pth does not match, the
-# only model_*.pth in the directory is used (no script change needed to release a different epoch); with several candidates the value is kept and the sanity check errors out.
+# only model_*.pth in the directory is used; with several candidates the value is kept and the sanity check errors out.
 if [ ! -f "${MODEL_FOLDER}/model_${MODEL_EPOCH}.pth" ]; then
     _CKPT_CANDS=( "${MODEL_FOLDER}"/model_*.pth )
     if [ "${#_CKPT_CANDS[@]}" -eq 1 ] && [ -f "${_CKPT_CANDS[0]}" ]; then
-        _CKPT_EPOCH="$(basename "${_CKPT_CANDS[0]}" .pth)"; _CKPT_EPOCH="${_CKPT_EPOCH#model_}"
-        if [[ "${_CKPT_EPOCH}" =~ ^[0-9]+$ ]]; then
-            MODEL_EPOCH="${_CKPT_EPOCH}"
-            echo "[Info] MODEL_EPOCH auto-resolved to ${MODEL_EPOCH} (the only weight in ${MODEL_FOLDER})"
-        fi
+        MODEL_EPOCH="$(basename "${_CKPT_CANDS[0]}" .pth)"; MODEL_EPOCH="${MODEL_EPOCH#model_}"
+        echo "[Info] MODEL_EPOCH auto-resolved to ${MODEL_EPOCH} (the only weight in ${MODEL_FOLDER})"
     fi
 fi
 PORT="${PORT:-13168}"   # matches the run_client.sh default
@@ -75,7 +73,7 @@ for _cfg in exp_cfg.yaml mvt_cfg.yaml; do
         echo "[Error] ${_cfg} missing in ${MODEL_FOLDER}"
         echo "        the weights must sit next to exp_cfg.yaml + mvt_cfg.yaml (they define the model structure)."
         echo "        your own run directories already have them; to keep a standalone copy, put all three files in one directory:"
-        echo "          model_<E>.pth  exp_cfg.yaml  mvt_cfg.yaml"
+        echo "          model_*.pth  exp_cfg.yaml  mvt_cfg.yaml"
         exit 1
     }
 done

@@ -153,8 +153,14 @@ def write_seed_summary(path: Path, per_split_overall: dict[str, float], per_spli
         f.write(f"{'avg':<10s}{avg_s:>14s}\n")
 
 
-_MODEL_RE = re.compile(r"^model_(\d+)$")
+# model_<epoch> for your own runs, model_<name> for the released weights (model_gembench).
+_MODEL_RE = re.compile(r"^model_(\d+|[A-Za-z][\w-]*)$")
 _SEED_RE = re.compile(r"^seed(\d+)$")
+
+
+def _epoch_key(epoch):
+    """Sort key: numeric epochs first, in order, then released names."""
+    return (0, epoch, "") if isinstance(epoch, int) else (1, 0, epoch)
 
 
 def discover_eval_roots(root: Path) -> list[Path]:
@@ -169,15 +175,16 @@ def discover_eval_roots(root: Path) -> list[Path]:
 
 
 def discover(gem_root: Path):
-    """Yield (model_epoch:int, seed:int, model_dir:Path, seed_dir:Path) tuples
-    for a given eval subdirectory (e.g. .../eval/gembench or .../eval/gembench_viz)."""
+    """Yield (model_epoch, seed:int, model_dir:Path, seed_dir:Path) tuples
+    for a given eval subdirectory (e.g. .../eval/gembench or .../eval/gembench_viz);
+    model_epoch is an int, or the released name (str)."""
     if not gem_root.is_dir():
         raise SystemExit(f"[Error] expected eval directory not found: {gem_root}")
     for model_dir in sorted(gem_root.iterdir()):
         m = _MODEL_RE.match(model_dir.name)
         if not m or not model_dir.is_dir():
             continue
-        epoch = int(m.group(1))
+        epoch = int(m.group(1)) if m.group(1).isdigit() else m.group(1)
         for seed_dir in sorted(model_dir.iterdir()):
             s = _SEED_RE.match(seed_dir.name)
             if not s or not seed_dir.is_dir():
@@ -257,7 +264,7 @@ def main():
             print(f"[Warn] no result.json files found under {gem_root}")
             continue
 
-        summary_rows.sort(key=lambda r: (r["model_epoch"], r["seed"]))
+        summary_rows.sort(key=lambda r: (_epoch_key(r["model_epoch"]), r["seed"]))
 
         csv_path = gem_root / "summary.csv"
         with open(csv_path, "w", newline="") as f:
@@ -278,12 +285,13 @@ def main():
             return f"{v * 100:6.2f}%" if v == v else "   N/A"
 
         # ---- Section 1: compact overview table ----
-        overview_header = f"{'epoch':>6s}{'seed':>6s}{'train':>10s}{'test_l2':>10s}{'test_l3':>10s}{'test_l4':>10s}{'avg':>10s}"
+        ew = max(6, *(len(str(r["model_epoch"])) + 1 for r in summary_rows))  # epoch column (names are wider)
+        overview_header = f"{'epoch':>{ew}s}{'seed':>6s}{'train':>10s}{'test_l2':>10s}{'test_l3':>10s}{'test_l4':>10s}{'avg':>10s}"
         overview_title = f"## Overview [{gem_root.name}] (epoch x level)"
         overview_lines = [overview_title, "", overview_header, "-" * len(overview_header)]
         for r in summary_rows:
             overview_lines.append(
-                f"{r['model_epoch']:>6d}{r['seed']:>6d}{fmt(r['train']):>10s}{fmt(r['test_l2']):>10s}{fmt(r['test_l3']):>10s}{fmt(r['test_l4']):>10s}{fmt(r['avg']):>10s}"
+                f"{r['model_epoch']:>{ew}}{r['seed']:>6d}{fmt(r['train']):>10s}{fmt(r['test_l2']):>10s}{fmt(r['test_l3']):>10s}{fmt(r['test_l4']):>10s}{fmt(r['avg']):>10s}"
             )
         overview = "\n".join(overview_lines) + "\n"
 

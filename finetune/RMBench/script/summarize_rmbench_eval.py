@@ -49,13 +49,14 @@ TASK_ROWS: List[Tuple[str, str, str]] = [
 ]
 
 GROUP1_SIZE = 5
-MODEL_DIR_RE = re.compile(r"^model_(\d+)(?:_(.+))?$")
+# model_<epoch>[_<suffix>] for your own runs, model_<name> for the released weights (model_rmbench_<task>).
+MODEL_DIR_RE = re.compile(r"^model_(?:(\d+)(?:_(.+))?|[A-Za-z][\w-]*)$")
 
 
 def model_sort_key(model_name: str) -> Tuple[int, str]:
-    """Sort by checkpoint number, then lexicographically by suffix."""
+    """Sort by checkpoint number, then lexicographically by suffix; released names last."""
     match = MODEL_DIR_RE.match(model_name)
-    if not match:
+    if not match or match.group(1) is None:
         return (999999, model_name)
     return (int(match.group(1)), match.group(2) or "")
 

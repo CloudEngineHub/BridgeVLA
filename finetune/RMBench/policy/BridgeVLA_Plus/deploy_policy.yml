@@ -7,5 +7,5 @@ seed: null
 instruction_type: seen
 
 # BridgeVLA-specific
-model_epoch: last       # picks model_<epoch>.pth, falling back to model_last.pth
+model_epoch: last       # picks model_<epoch>.pth, falling back to model_last.pth, then to the only model_*.pth (released weights)
 device: 0

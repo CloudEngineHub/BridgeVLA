@@ -39,9 +39,16 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-_MODEL_RE = re.compile(r"^model_(\d+)(?:_.+)?$")  # model_99 or model_99_05_24_00_54
+# model_99 or model_99_05_24_00_54 for your own runs, model_<name> for the released weights (model_memorybench).
+_MODEL_RE = re.compile(r"^model_(?:(\d+)(?:_.+)?|([A-Za-z][\w-]*))$")
 _SEED_RE = re.compile(r"^seed(\d+)$")
 _WORD_RE = re.compile(r"[a-zA-Z]+")
+
+
+def _epoch_key(epoch):
+    """Sort key: numeric epochs first, in order, then released names."""
+    return (0, epoch, "") if isinstance(epoch, int) else (1, 0, epoch)
+
 
 # Discriminative substrings used to map an evaluation instruction (returned by
 # RLBench's `task.reset()`) back to its base task. These are kept here (not in
@@ -337,12 +344,13 @@ def discover_eval_roots(root: Path) -> list:
 
 
 def discover_runs(mb_root: Path):
-    """Yield (epoch, seed, model_dir, seed_dir) tuples under one eval/memorybench* dir."""
+    """Yield (epoch, seed, model_dir, seed_dir) tuples under one eval/memorybench* dir;
+    epoch is an int, or the released name (str)."""
     for model_dir in sorted(mb_root.iterdir()):
         m = _MODEL_RE.match(model_dir.name)
         if not m or not model_dir.is_dir():
             continue
-        epoch = int(m.group(1))
+        epoch = int(m.group(1)) if m.group(1) else m.group(2)
         for seed_dir in sorted(model_dir.iterdir()):
             s = _SEED_RE.match(seed_dir.name)
             if not s or not seed_dir.is_dir():
@@ -439,7 +447,7 @@ def main():
             print(f"[Warn] no result.jsonl files found under {mb_root}")
             continue
 
-        summary_rows.sort(key=lambda r: (r["model_epoch"], r["seed"]))
+        summary_rows.sort(key=lambda r: (_epoch_key(r["model_epoch"]), r["seed"]))
 
         csv_path = mb_root / "summary.csv"
         with open(csv_path, "w", newline="") as f:
@@ -478,8 +486,9 @@ def main():
 
         # ---- Section 1: compact overview ----
         col_w = max(12, max(len(b) for b in base_tasks) + 2)
+        ew = max(6, *(len(str(r["model_epoch"])) + 1 for r in summary_rows))  # epoch column (names are wider)
         header = (
-            f"{'epoch':>6s}{'seed':>6s}"
+            f"{'epoch':>{ew}s}{'seed':>6s}"
             + "".join(f"{b:>{col_w}s}" for b in base_tasks)
             + f"{'overall':>10s}"
             + f"{'dup':>6s}"
@@ -496,7 +505,7 @@ def main():
         for r in summary_rows:
             dup_mark = "  *" if r.get("has_dups") else ""
             overview_lines.append(
-                f"{r['model_epoch']:>6d}{r['seed']:>6d}"
+                f"{r['model_epoch']:>{ew}}{r['seed']:>6d}"
                 + "".join(f"{fmt(r[b]):>{col_w}s}" for b in base_tasks)
                 + f"{fmt(r['overall']):>10s}"
                 + f"{dup_mark:>6s}"

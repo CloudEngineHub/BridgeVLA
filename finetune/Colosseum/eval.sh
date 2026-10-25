@@ -34,7 +34,7 @@ BRIDGEVLA_ROOT="$(dirname "${FINETUNE_DIR}")"                      # <repo>
 export BRIDGEVLA_DATA_ROOT="${BRIDGEVLA_DATA_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_data}"
 export BRIDGEVLA_LOG_DIR="${BRIDGEVLA_LOG_DIR:-${BRIDGEVLA_DATA_ROOT}/logs}"
 export BRIDGEVLA_CKPT_ROOT="${BRIDGEVLA_CKPT_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_ckpt}"
-# Released checkpoint root: one subdirectory per bench holding model_<E>.pth + exp_cfg.yaml + mvt_cfg.yaml.
+# Released checkpoint root: one subdirectory per bench holding model_<bench>.pth + exp_cfg.yaml + mvt_cfg.yaml.
 # Your own training runs share that layout, so just override MODEL_FOLDER=<run dir>.
 export BRIDGEVLA_RELEASE_CKPT_DIR="${BRIDGEVLA_RELEASE_CKPT_DIR:-${BRIDGEVLA_CKPT_ROOT}/bridgevla_plus}"
 export PALIGEMMA_PATH="${PALIGEMMA_PATH:-${BRIDGEVLA_CKPT_ROOT}/paligemma-3b-pt-224}"
@@ -58,7 +58,7 @@ source "${CONDA_BASE}/bin/activate" "${COLOSSEUM_CONDA_ENV:-bridgevla_plus_rlben
 
 # ---- Model & data — override via the environment, no need to edit the script ----
 MODEL_FOLDER="${MODEL_FOLDER:-${BRIDGEVLA_RELEASE_CKPT_DIR}/colosseum}"
-MODEL_NAME="${MODEL_NAME:-model_290.pth}"
+MODEL_NAME="${MODEL_NAME:-model_colosseum.pth}"
 # A released directory usually holds a single weight: when MODEL_NAME does not match, the only model_*.pth
 # is picked automatically. With several candidates the value is kept and the sanity check below errors out.
 if [ ! -f "${MODEL_FOLDER}/${MODEL_NAME}" ]; then
@@ -187,7 +187,7 @@ for _cfg in exp_cfg.yaml mvt_cfg.yaml; do
         echo "[Error] ${_cfg} missing in ${MODEL_FOLDER}"
         echo "        the weights must sit next to exp_cfg.yaml + mvt_cfg.yaml (they define the model structure)."
         echo "        your own run directories already have them; to keep a standalone copy, put all three files in one directory:"
-        echo "          model_<E>.pth  exp_cfg.yaml  mvt_cfg.yaml"
+        echo "          model_*.pth  exp_cfg.yaml  mvt_cfg.yaml"
         exit 1
     }
 done

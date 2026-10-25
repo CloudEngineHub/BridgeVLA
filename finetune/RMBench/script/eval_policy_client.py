@@ -382,7 +382,8 @@ def main(usr_args):
     # mvt_cfg.yaml), the equivalent of memoryBench's MODEL_FOLDER. The innermost directory name = timestamp
     # (no year) + stage-2 flags; the model name (e.g. model_105) stays a separate level, so different eval strategies on one ckpt can be compared:
     #   * ckpt_setting is a directory -> <run_dir>/eval/rmbench/<task>/<cfg>/<model_name>/<ts>_<flags>/
-    #     (the model name is resolved by the same rule as the server: model_<model_epoch>.pth, falling back to model_last.pth)
+    #     (the model name is resolved by the same rule as the server: model_<model_epoch>.pth, falling back to model_last.pth,
+    #      then to the directory's only model_*.pth, e.g. the released model_rmbench_<task>.pth)
     #   * ckpt_setting is a .pth file  -> dirname(.pth) is the run dir and the model name = the .pth filename without its suffix
     #   * neither a directory nor a file (a bare tag) -> fall back to the old relative eval_result/ as a safety net
     # flags look like force_center_0_sparsePC_force_center_1 (always an explicit 0/1, both 0 by default)

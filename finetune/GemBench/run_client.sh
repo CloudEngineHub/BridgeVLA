@@ -7,7 +7,7 @@ BRIDGEVLA_ROOT="$(dirname "${FINETUNE_DIR}")"                      # <repo>
 export BRIDGEVLA_DATA_ROOT="${BRIDGEVLA_DATA_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_data}"
 export BRIDGEVLA_LOG_DIR="${BRIDGEVLA_LOG_DIR:-${BRIDGEVLA_DATA_ROOT}/logs}"
 export BRIDGEVLA_CKPT_ROOT="${BRIDGEVLA_CKPT_ROOT:-${BRIDGEVLA_ROOT}/data/bridgevla_ckpt}"
-# Released checkpoint root: one subdirectory per bench, holding model_<E>.pth + exp_cfg.yaml +
+# Released checkpoint root: one subdirectory per bench, holding model_<bench>.pth + exp_cfg.yaml +
 # mvt_cfg.yaml (all three are needed to rebuild the right model). Your own training runs follow the
 # same convention, so just override MODEL_FOLDER=<run dir>.
 export BRIDGEVLA_RELEASE_CKPT_DIR="${BRIDGEVLA_RELEASE_CKPT_DIR:-${BRIDGEVLA_CKPT_ROOT}/bridgevla_plus}"
@@ -28,18 +28,16 @@ source "${CONDA_BASE}/bin/activate" "${GEMBENCH_CONDA_ENV:-bridgevla_plus_gemben
 MODEL_FOLDER="${MODEL_FOLDER:-${BRIDGEVLA_RELEASE_CKPT_DIR}/gembench}"
 GEMBENCH_ROOT="${GEMBENCH_ROOT:-${BRIDGEVLA_DATA_ROOT}/GemBench}"
 SEED="${1:-300}"
-MODEL_EPOCH="${2:-200}"
+# Weights file model_<MODEL_EPOCH>.pth: the released name by default, or an epoch of your own run.
+MODEL_EPOCH="${2:-gembench}"
 # A released directory usually holds a single weight: when model_${MODEL_EPOCH}.pth does not match, the
-# only model_*.pth in the directory is used (no script change needed to release a different epoch); with several candidates the value is kept and the sanity check errors out.
-# It must resolve to the same epoch as run_server.sh, or the server's weights and the client's labels disagree.
+# only model_*.pth in the directory is used; with several candidates the value is kept and the sanity check errors out.
+# It must resolve to the same weights as run_server.sh, or the server's weights and the client's labels disagree.
 if [ ! -f "${MODEL_FOLDER}/model_${MODEL_EPOCH}.pth" ]; then
     _CKPT_CANDS=( "${MODEL_FOLDER}"/model_*.pth )
     if [ "${#_CKPT_CANDS[@]}" -eq 1 ] && [ -f "${_CKPT_CANDS[0]}" ]; then
-        _CKPT_EPOCH="$(basename "${_CKPT_CANDS[0]}" .pth)"; _CKPT_EPOCH="${_CKPT_EPOCH#model_}"
-        if [[ "${_CKPT_EPOCH}" =~ ^[0-9]+$ ]]; then
-            MODEL_EPOCH="${_CKPT_EPOCH}"
-            echo "[Info] MODEL_EPOCH auto-resolved to ${MODEL_EPOCH} (the only weight in ${MODEL_FOLDER})"
-        fi
+        MODEL_EPOCH="$(basename "${_CKPT_CANDS[0]}" .pth)"; MODEL_EPOCH="${MODEL_EPOCH#model_}"
+        echo "[Info] MODEL_EPOCH auto-resolved to ${MODEL_EPOCH} (the only weight in ${MODEL_FOLDER})"
     fi
 fi
 MICROSTEP_DATA_DIR="${3:-${GEMBENCH_ROOT}/test_dataset/microsteps/seed${SEED}}"
